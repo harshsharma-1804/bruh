@@ -1,0 +1,450 @@
+#!/usr/bin/env bash
+# =============================================================================
+# BRUH — bin/bruh
+# =============================================================================
+
+set -euo pipefail
+
+BRUH_BIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export BRUH_HOME="$(dirname "$BRUH_BIN")"
+
+source "$BRUH_HOME/lib/core.sh"
+source "$BRUH_HOME/lib/registry.sh"
+source "$BRUH_HOME/lib/intent.sh"
+
+bruh_require_jq
+export HOMEBREW_PREFIX="$(bruh_homebrew_prefix)"
+
+source "$BRUH_HOME/providers/node.sh"
+source "$BRUH_HOME/providers/java.sh"
+source "$BRUH_HOME/providers/python.sh"
+source "$BRUH_HOME/providers/go.sh"
+source "$BRUH_HOME/providers/rust.sh"
+source "$BRUH_HOME/providers/yarn.sh"
+source "$BRUH_HOME/providers/pnpm.sh"
+
+# -----------------------------------------------------------------------------
+# bruh_status_all
+# -----------------------------------------------------------------------------
+bruh_status_all() {
+  printf "\n${BRUH_BOLD}  Bruh${BRUH_RESET} — runtime environment manager\n\n"
+  bruh_divider
+  local tools="node java python go rust yarn pnpm"
+  for tool in $tools; do
+    local current default
+    current=$(registry_get "$tool" "current" 2>/dev/null || echo "")
+    default=$(registry_get "$tool" "default" 2>/dev/null || echo "")
+    if [ -n "$current" ] && [ "$current" != "null" ]; then
+      printf "  ${BRUH_GREEN}%-8s${BRUH_RESET}  ${BRUH_BOLD}%s${BRUH_RESET}" "$tool" "$current"
+      [ -n "$default" ] && [ "$default" != "null" ] && [ "$default" != "$current" ] \
+        && printf "  ${BRUH_DIM}(default: %s)${BRUH_RESET}" "$default"
+      printf "\n"
+    else
+      printf "  ${BRUH_DIM}%-8s  not set${BRUH_RESET}\n" "$tool"
+    fi
+  done
+  printf "\n"
+  printf "  ${BRUH_DIM}bruh help  for all commands${BRUH_RESET}\n\n"
+}
+
+# -----------------------------------------------------------------------------
+# bruh_runtimes
+# -----------------------------------------------------------------------------
+bruh_runtimes() {
+  printf "\n${BRUH_BOLD}  Runtimes & Tools${BRUH_RESET}\n\n"
+  printf "  ${BRUH_BOLD}%-10s %-12s %-12s %-20s${BRUH_RESET}\n" "Tool" "Current" "Default" "Path"
+  bruh_divider
+  local tools="node java python go rust yarn pnpm"
+  for tool in $tools; do
+    local current default path_bin
+    current=$(registry_get "$tool" "current" 2>/dev/null || echo "—")
+    default=$(registry_get "$tool" "default" 2>/dev/null || echo "—")
+    [ "$current" = "null" ] || [ -z "$current" ] && current="—"
+    [ "$default" = "null" ] || [ -z "$default" ] && default="—"
+    case "$tool" in
+      node)   path_bin=$(command -v node   2>/dev/null || echo "not found") ;;
+      java)   path_bin=$(command -v java   2>/dev/null || echo "not found") ;;
+      python) path_bin=$(command -v python3 2>/dev/null || echo "not found") ;;
+      go)     path_bin=$(command -v go     2>/dev/null || echo "not found") ;;
+      rust)   path_bin=$(command -v rustc  2>/dev/null || echo "not found") ;;
+      yarn)   path_bin=$(command -v yarn   2>/dev/null || echo "not found") ;;
+      pnpm)   path_bin=$(command -v pnpm   2>/dev/null || echo "not found") ;;
+    esac
+    printf "  %-10s %-12s %-12s %-20s\n" "$tool" "$current" "$default" "$path_bin"
+  done
+  printf "\n"
+}
+
+# -----------------------------------------------------------------------------
+# bruh_help
+# -----------------------------------------------------------------------------
+bruh_help() {
+  printf "\n"
+  printf "${BRUH_BOLD}Bruh${BRUH_RESET} — runtime intent engine\n"
+  printf "${BRUH_DIM}node  java  python  go  rust  yarn  pnpm${BRUH_RESET}\n"
+  printf "\n"
+
+  # ── SEARCH ──────────────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}SEARCH${BRUH_RESET}  ${BRUH_DIM}discover what is available to install${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh search"                       "Show tool picker"
+  printf "  %-44s  %s\n" "bruh search node"                  "Available Node versions"
+  printf "  %-44s  %s\n" "bruh search java"                  "Available JDK distributions + providers"
+  printf "  %-44s  %s\n" "bruh search java 21"               "Filter to Java 21 — all providers"
+  printf "  %-44s  %s\n" "bruh search python"                "Available Python versions"
+  printf "  %-44s  %s\n" "bruh search go"                    "Available Go versions"
+  printf "  %-44s  %s\n" "bruh search rust"                  "Available Rust channels"
+  printf "  %-44s  %s\n" "bruh search yarn"                  "Available Yarn versions"
+  printf "  %-44s  %s\n" "bruh search pnpm"                  "Available pnpm versions"
+  printf "\n"
+
+  # ── LOOKUP ───────────────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}LOOKUP${BRUH_RESET}  ${BRUH_DIM}what you have installed${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh lookup"                       "Show tool picker"
+  printf "  %-44s  %s\n" "bruh lookup node"                  "Installed Node versions (active + default marked)"
+  printf "  %-44s  %s\n" "bruh lookup java"                  "Installed Java versions with provider"
+  printf "  %-44s  %s\n" "bruh lookup python"                "Installed Python versions"
+  printf "  %-44s  %s\n" "bruh lookup go"                    "Installed Go versions"
+  printf "  %-44s  %s\n" "bruh lookup rust"                  "Installed Rust toolchains"
+  printf "  %-44s  %s\n" "bruh lookup yarn"                  "Installed Yarn versions with exact semver"
+  printf "  %-44s  %s\n" "bruh lookup pnpm"                  "Installed pnpm versions with exact semver"
+  printf "\n"
+
+  # ── INSTALL / ACTIVATE ───────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}INSTALL / ACTIVATE${BRUH_RESET}  ${BRUH_DIM}install if needed, then activate${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh node 22"                      "Node 22"
+  printf "  %-44s  %s\n" "bruh node 20"                      "Node 20"
+  printf "  %-44s  %s\n" "bruh node latest"                  "Newest Node release"
+  printf "  %-44s  %s\n" "bruh node stable"                  "Latest LTS Node"
+  printf "  %-44s  %s\n" "bruh node lts"                     "Same as stable"
+  printf "  %-44s  %s\n" "bruh java 21"                      "Java 21 (openjdk — default provider)"
+  printf "  %-44s  %s\n" "bruh java 21 temurin"              "Java 21 from Temurin"
+  printf "  %-44s  %s\n" "bruh java 21 corretto"             "Java 21 from Amazon Corretto"
+  printf "  %-44s  %s\n" "bruh java 21 zulu"                 "Java 21 from Azul Zulu"
+  printf "  %-44s  %s\n" "bruh java 21 graalvm"              "Java 21 from GraalVM"
+  printf "  %-44s  %s\n" "bruh java 21 oracle"               "Java 21 from Oracle JDK"
+  printf "  %-44s  %s\n" "bruh java latest"                  "Latest available JDK"
+  printf "  %-44s  %s\n" "bruh java stable / lts"            "Latest LTS JDK"
+  printf "  %-44s  %s\n" "bruh python 3.12"                  "Python 3.12"
+  printf "  %-44s  %s\n" "bruh python latest"                "Newest Python release"
+  printf "  %-44s  %s\n" "bruh python stable"                "Latest stable Python"
+  printf "  %-44s  %s\n" "bruh go 1.23"                      "Go 1.23"
+  printf "  %-44s  %s\n" "bruh go latest"                    "Newest Go release"
+  printf "  %-44s  %s\n" "bruh rust stable"                  "Rust stable toolchain"
+  printf "  %-44s  %s\n" "bruh rust beta"                    "Rust beta toolchain"
+  printf "  %-44s  %s\n" "bruh rust nightly"                 "Rust nightly toolchain"
+  printf "  %-44s  %s\n" "bruh rust 1.78.0"                  "Specific Rust version"
+  printf "  %-44s  %s\n" "bruh yarn 4"                       "Yarn latest 4.x (global)"
+  printf "  %-44s  %s\n" "bruh yarn 4.3.1"                   "Yarn exact version (global)"
+  printf "  %-44s  %s\n" "bruh yarn berry"                   "Yarn latest modern (v2+)"
+  printf "  %-44s  %s\n" "bruh yarn classic"                 "Yarn latest v1.x"
+  printf "  %-44s  %s\n" "bruh yarn latest"                  "Yarn absolute newest"
+  printf "  %-44s  %s\n" "bruh pnpm 9"                       "pnpm latest 9.x (global)"
+  printf "  %-44s  %s\n" "bruh pnpm 9.1.0"                   "pnpm exact version (global)"
+  printf "  %-44s  %s\n" "bruh pnpm latest"                  "pnpm absolute newest"
+  printf "\n"
+  printf "  ${BRUH_DIM}Explicit forms:${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}  bruh install node 22${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}  bruh install java 21 temurin${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}  bruh use node 20${BRUH_RESET}\n"
+  printf "\n"
+
+  # ── REMOVE ───────────────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}REMOVE${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh remove node 20"               "Remove Node 20"
+  printf "  %-44s  %s\n" "bruh remove java 17"               "Remove Java 17"
+  printf "  %-44s  %s\n" "bruh remove java 17 temurin"       "Remove Java 17 (specific provider)"
+  printf "  %-44s  %s\n" "bruh remove python 3.11"           "Remove Python 3.11"
+  printf "  %-44s  %s\n" "bruh remove go 1.22"               "Remove Go 1.22"
+  printf "  %-44s  %s\n" "bruh remove rust beta"             "Remove Rust beta toolchain"
+  printf "  %-44s  %s\n" "bruh remove yarn 1"                "Remove Yarn v1"
+  printf "  %-44s  %s\n" "bruh remove pnpm 8"                "Remove pnpm 8"
+  printf "  ${BRUH_DIM}  bruh uninstall <tool> <version>  (same as remove)${BRUH_RESET}\n"
+  printf "\n"
+
+  # ── DEFAULT ──────────────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}DEFAULT${BRUH_RESET}  ${BRUH_DIM}version loaded in every new terminal${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh default node 22"              "Set Node 22 as default"
+  printf "  %-44s  %s\n" "bruh default java 21"              "Set Java 21 as default"
+  printf "  %-44s  %s\n" "bruh default python 3.12"          "Set Python 3.12 as default"
+  printf "  %-44s  %s\n" "bruh default go 1.23"              "Set Go 1.23 as default"
+  printf "  %-44s  %s\n" "bruh default rust stable"          "Set Rust stable as default"
+  printf "  %-44s  %s\n" "bruh default yarn 4"               "Set Yarn 4 as default"
+  printf "  %-44s  %s\n" "bruh default pnpm 9"               "Set pnpm 9 as default"
+  printf "  ${BRUH_DIM}  bruh <tool> default <version>  (same — tool-first form)${BRUH_RESET}\n"
+  printf "\n"
+
+  # ── UPDATE ───────────────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}UPDATE${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh update node"                  "Update default Node to latest"
+  printf "  %-44s  %s\n" "bruh update node 22"               "Update Node 22"
+  printf "  %-44s  %s\n" "bruh update node all"              "Update all installed Node versions"
+  printf "  %-44s  %s\n" "bruh update java"                  "Update default Java"
+  printf "  %-44s  %s\n" "bruh update java all"              "Update all installed Java versions"
+  printf "  %-44s  %s\n" "bruh update python"                "Update default Python"
+  printf "  %-44s  %s\n" "bruh update python all"            "Update all installed Python versions"
+  printf "  %-44s  %s\n" "bruh update go"                    "Update default Go"
+  printf "  %-44s  %s\n" "bruh update go all"                "Update all installed Go versions"
+  printf "  %-44s  %s\n" "bruh update rust"                  "rustup update (all toolchains)"
+  printf "  %-44s  %s\n" "bruh update yarn"                  "Update Yarn to latest"
+  printf "  %-44s  %s\n" "bruh update pnpm"                  "Update pnpm to latest"
+  printf "\n"
+
+  # ── STATUS & INFO ─────────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}STATUS & INFO${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh"                              "Status of all tools"
+  printf "  %-44s  %s\n" "bruh runtimes"                     "Full status table with paths"
+  printf "  %-44s  %s\n" "bruh node"                         "Node — current, default, path"
+  printf "  %-44s  %s\n" "bruh java"                         "Java — current, default, JAVA_HOME, path"
+  printf "  %-44s  %s\n" "bruh python"                       "Python — current, default, path"
+  printf "  %-44s  %s\n" "bruh go"                           "Go — current, default, GOROOT, path"
+  printf "  %-44s  %s\n" "bruh rust"                         "Rust — current toolchain, CARGO_HOME"
+  printf "  %-44s  %s\n" "bruh yarn"                         "Yarn — current, exact semver, default"
+  printf "  %-44s  %s\n" "bruh pnpm"                         "pnpm — current, exact semver, default"
+  printf "  %-44s  %s\n" "bruh node where"                   "Node binary path"
+  printf "  %-44s  %s\n" "bruh java where"                   "Java binary path + JAVA_HOME"
+  printf "  %-44s  %s\n" "bruh python where"                 "Python binary path"
+  printf "  %-44s  %s\n" "bruh go where"                     "Go binary path + GOROOT"
+  printf "  %-44s  %s\n" "bruh rust where"                   "rustc + cargo paths"
+  printf "  %-44s  %s\n" "bruh yarn where"                   "Yarn binary path"
+  printf "  %-44s  %s\n" "bruh pnpm where"                   "pnpm binary path"
+  printf "\n"
+
+  # ── PER-PROJECT PINNING ───────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}PER-PROJECT PINNING${BRUH_RESET}  ${BRUH_DIM}run from inside a project directory${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh yarn set 4.3.1"               "Pin exact Yarn version (.yarnrc.yml)"
+  printf "  %-44s  %s\n" "bruh yarn set berry"               "Pin latest modern Yarn"
+  printf "  %-44s  %s\n" "bruh yarn set stable"              "Pin latest stable Yarn"
+  printf "  %-44s  %s\n" "bruh yarn set classic"             "Pin Yarn v1.x for this project"
+  printf "  %-44s  %s\n" "bruh yarn set latest"              "Pin absolute newest Yarn"
+  printf "  %-44s  %s\n" "bruh pnpm set 9.1.0"               "Pin exact pnpm version (package.json)"
+  printf "  %-44s  %s\n" "bruh pnpm set latest"              "Pin latest pnpm"
+  printf "  %-44s  %s\n" "bruh pnpm set stable"              "Pin latest stable pnpm"
+  printf "\n"
+
+  # ── NATURAL LANGUAGE ─────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}NATURAL LANGUAGE${BRUH_RESET}\n"
+  printf "  %-44s\n" "bruh get node 22"
+  printf "  %-44s\n" "bruh get me node 22"
+  printf "  %-44s\n" "bruh i need java 21"
+  printf "  %-44s\n" "bruh setup go 1.23 for me"
+  printf "  %-44s\n" "bruh install java 21 please"
+  printf "  %-44s\n" "bruh where is node"
+  printf "  %-44s\n" "bruh where is python"
+  printf "  %-44s\n" "bruh what node version"
+  printf "  %-44s\n" "bruh what java version"
+  printf "\n"
+
+  # ── SYSTEM ────────────────────────────────────────────────────────────────────
+  printf "${BRUH_BOLD}SYSTEM${BRUH_RESET}\n"
+  printf "  %-44s  %s\n" "bruh help"                         "Show this reference"
+  printf "  %-44s  %s\n" "bruh runtimes"                     "Status table for all tools"
+  printf "  %-44s  %s\n" "bruh goodbye"                      "Uninstall Bruh + everything it installed"
+  printf "\n"
+  printf "  ${BRUH_DIM}Full docs: COMMANDS.md${BRUH_RESET}\n"
+  printf "\n"
+}
+
+# -----------------------------------------------------------------------------
+# bruh_search_prompt — shown when `bruh search` is called with no tool
+# -----------------------------------------------------------------------------
+bruh_search_prompt() {
+  printf "\n${BRUH_BOLD}bruh search${BRUH_RESET} — what do you want to search?\n\n"
+  printf "  %-10s  %s\n" "Tool" "Description"
+  printf "  %-10s  %s\n" "─────────" "─────────────────────────────────────"
+  printf "  %-10s  %s\n" "node"   "Available Node.js versions"
+  printf "  %-10s  %s\n" "java"   "Available JDK distributions and providers"
+  printf "  %-10s  %s\n" "python" "Available Python versions"
+  printf "  %-10s  %s\n" "go"     "Available Go versions"
+  printf "  %-10s  %s\n" "rust"   "Available Rust toolchains"
+  printf "  %-10s  %s\n" "yarn"   "Available Yarn versions"
+  printf "  %-10s  %s\n" "pnpm"   "Available pnpm versions"
+  printf "\n"
+  printf "  ${BRUH_BOLD}Usage:${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}bruh search node${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}bruh search java${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}bruh search java 21      (filter to version 21)${BRUH_RESET}\n"
+  printf "\n"
+}
+
+# -----------------------------------------------------------------------------
+# bruh_lookup_all — shown when `bruh lookup` is called with no tool
+# -----------------------------------------------------------------------------
+bruh_lookup_all() {
+  printf "\n${BRUH_BOLD}bruh lookup${BRUH_RESET} — installed versions\n\n"
+  printf "  %-10s  %s\n" "Tool" "Description"
+  printf "  %-10s  %s\n" "─────────" "──────────────────────────────────────"
+  printf "  %-10s  %s\n" "node"   "Show installed Node versions"
+  printf "  %-10s  %s\n" "java"   "Show installed JDK versions"
+  printf "  %-10s  %s\n" "python" "Show installed Python versions"
+  printf "  %-10s  %s\n" "go"     "Show installed Go versions"
+  printf "  %-10s  %s\n" "rust"   "Show installed Rust toolchains"
+  printf "  %-10s  %s\n" "yarn"   "Show installed Yarn versions"
+  printf "  %-10s  %s\n" "pnpm"   "Show installed pnpm versions"
+  printf "\n"
+  printf "  ${BRUH_BOLD}Usage:${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}bruh lookup node${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}bruh lookup java${BRUH_RESET}\n"
+  printf "\n"
+}
+
+# -----------------------------------------------------------------------------
+# bruh_goodbye
+# -----------------------------------------------------------------------------
+bruh_goodbye() {
+  printf "\n${BRUH_BOLD}${BRUH_RED}  Bruh Uninstall${BRUH_RESET}\n\n"
+  bruh_log "This will remove Bruh and everything it installed."
+  bruh_log "Pre-existing runtimes you had before Bruh will ${BRUH_BOLD}not${BRUH_RESET} be touched."
+  bruh_log ""
+  printf "  Continue? [y/N] "
+  read -r confirm
+  case "$confirm" in
+    [yY]|[yY][eE][sS]) ;;
+    *) bruh_log "Aborted."; return 0 ;;
+  esac
+  printf "\n"
+  bruh_info "Building removal plan from registry..."
+
+  local java_versions
+  java_versions=$(registry_list_bruh_installed "java" 2>/dev/null || echo "")
+  if [ -n "$java_versions" ]; then
+    bruh_info "Java JVM symlinks require sudo. Please authenticate:"
+    sudo -v || bruh_die "sudo authentication failed"
+  fi
+
+  # Node
+  registry_list_bruh_installed "node" 2>/dev/null | while read -r v; do
+    [ -z "$v" ] && continue
+    bruh_info "Removing Node $v..."
+    brew uninstall "$(_node_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Node $v"
+    rm -f "$NODE_RUNTIME_HOME/v${v}" 2>/dev/null || true
+  done
+
+  # Java
+  echo "$java_versions" | while read -r v; do
+    [ -z "$v" ] && continue
+    bruh_info "Removing Java $v..."
+    brew uninstall "$(_java_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Java $v"
+    local jl; jl=$(_java_jvm_link "$v")
+    ( [ -e "$jl" ] || [ -L "$jl" ] ) && sudo rm -f "$jl"
+  done
+
+  # Python
+  registry_list_bruh_installed "python" 2>/dev/null | while read -r v; do
+    [ -z "$v" ] && continue
+    bruh_info "Removing Python $v..."
+    brew uninstall "$(_python_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Python $v"
+    rm -f "$PYTHON_RUNTIME_HOME/v${v}" 2>/dev/null || true
+  done
+
+  # Go
+  registry_list_bruh_installed "go" 2>/dev/null | while read -r v; do
+    [ -z "$v" ] && continue
+    bruh_info "Removing Go $v..."
+    brew uninstall "$(_go_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Go $v"
+    rm -f "$GO_RUNTIME_HOME/v${v}" 2>/dev/null || true
+  done
+
+  # Rust
+  registry_list_bruh_installed "rust" 2>/dev/null | while read -r v; do
+    [ -z "$v" ] && continue
+    bruh_info "Removing Rust $v..."
+    rustup toolchain uninstall "$v" 2>/dev/null || bruh_warn "Could not uninstall Rust $v"
+  done
+
+  # Yarn
+  local yarn_exact; yarn_exact=$(registry_get_exact "yarn" 2>/dev/null || echo "")
+  if [ -n "$yarn_exact" ] && registry_list_bruh_installed "yarn" 2>/dev/null | grep -q .; then
+    bruh_info "Removing Yarn $yarn_exact from corepack..."
+    corepack remove "yarn@${yarn_exact}" 2>/dev/null || bruh_warn "Could not remove Yarn"
+  fi
+
+  # pnpm
+  local pnpm_exact; pnpm_exact=$(registry_get_exact "pnpm" 2>/dev/null || echo "")
+  if [ -n "$pnpm_exact" ] && registry_list_bruh_installed "pnpm" 2>/dev/null | grep -q .; then
+    bruh_info "Removing pnpm $pnpm_exact from corepack..."
+    corepack remove "pnpm@${pnpm_exact}" 2>/dev/null || bruh_warn "Could not remove pnpm"
+  fi
+
+  # Shell integration
+  bruh_info "Removing shell integration..."
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
+    if [ -f "$rc" ] && grep -q 'tools/bruh/env/bruh.env' "$rc" 2>/dev/null; then
+      grep -v 'tools/bruh/env/bruh.env' "$rc" > "${rc}.bruh_tmp" \
+        && mv "${rc}.bruh_tmp" "$rc"
+      # Also remove the comment line above it
+      grep -v '# Bruh — runtime environment manager' "$rc" > "${rc}.bruh_tmp" \
+        && mv "${rc}.bruh_tmp" "$rc"
+      bruh_ok "Removed from $rc"
+    fi
+  done
+
+  # Unset env vars
+  bruh_info "Clearing environment variables..."
+  unset BRUH_HOME NODE_HOME JAVA_HOME PYTHON_HOME GOROOT GOPATH CARGO_HOME RUSTUP_HOME 2>/dev/null || true
+  export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "tools/bruh" | paste -sd ':' -)
+
+  # Remove directory
+  bruh_info "Removing ~/tools/bruh/..."
+  rm -rf "$HOME/tools/bruh"
+
+  printf "\n  ${BRUH_BOLD}${BRUH_GREEN}Bruh is gone. Your system is clean.${BRUH_RESET}\n\n"
+}
+
+# =============================================================================
+# MAIN DISPATCH
+# =============================================================================
+if [ $# -eq 0 ]; then
+  bruh_status_all; exit 0
+fi
+
+intent=$(bruh_parse_intent "$@")
+action=$(echo "$intent" | cut -d'|' -f1)
+tool=$(echo "$intent"   | cut -d'|' -f2)
+version=$(echo "$intent" | cut -d'|' -f3)
+
+case "$action" in
+  help)     bruh_help;     exit 0 ;;
+  runtimes) bruh_runtimes; exit 0 ;;
+  goodbye)  bruh_goodbye;  exit 0 ;;
+  status)
+    if [ "$tool" = "all" ] || [ -z "$tool" ]; then
+      bruh_status_all; exit 0
+    fi
+    ;;
+  search)
+    if [ "$tool" = "all" ] || [ -z "$tool" ]; then
+      bruh_search_prompt; exit 0
+    fi
+    "${tool}_search" "$version"
+    exit 0
+    ;;
+  lookup)
+    if [ "$tool" = "all" ] || [ -z "$tool" ]; then
+      bruh_lookup_all; exit 0
+    fi
+    ;;
+esac
+
+[ -z "$tool" ] && bruh_die "Could not determine tool from: $*"
+
+case "$action" in
+  install_or_activate) "${tool}_install_or_activate" "$version" ;;
+  install)             "${tool}_install"             "$version" ;;
+  activate)            "${tool}_activate"            "$version" ;;
+  remove)              "${tool}_remove"              "$version" ;;
+  set_default)         "${tool}_set_default"         "$version" ;;
+  status)              "${tool}_status"                         ;;
+  lookup)              "${tool}_lookup"                         ;;
+  locate)              "${tool}_locate"                         ;;
+  update)              "${tool}_update"              "$version" ;;
+  set_project)         "${tool}_set_project"         "$version" ;;
+  search)              "${tool}_search"              "$version" ;;
+  latest)              "${tool}_install_or_activate" "latest"   ;;
+  stable)              "${tool}_install_or_activate" "stable"   ;;
+  classic)             "${tool}_install_or_activate" "classic"  ;;
+  berry)               "${tool}_install_or_activate" "berry"    ;;
+  *)
+    bruh_err "Unknown action: '$action'"
+    bruh_log "Run: bruh help"
+    exit 1 ;;
+esac

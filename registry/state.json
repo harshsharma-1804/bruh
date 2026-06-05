@@ -1,0 +1,9 @@
+{
+  "node":   { "installed": [], "bruh_installed": [], "current": null, "default": null },
+  "java":   { "installed": [], "bruh_installed": [], "current": null, "default": null },
+  "python": { "installed": [], "bruh_installed": [], "current": null, "default": null },
+  "go":     { "installed": [], "bruh_installed": [], "current": null, "default": null },
+  "rust":   { "installed": [], "bruh_installed": [], "current": null, "default": null },
+  "yarn":   { "installed": [], "bruh_installed": [], "current": null, "current_exact": null, "default": null },
+  "pnpm":   { "installed": [], "bruh_installed": [], "current": null, "current_exact": null, "default": null }
+}
