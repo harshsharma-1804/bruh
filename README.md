@@ -46,21 +46,31 @@ Five tools. Five syntaxes. Five config files. Bruh replaces all of that with a s
 
 ## Install
 
-**One-line install:**
+### Stable (recommended)
+
+> Installs from the `main` branch — tested and ready to use.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/BRUH_REPO_PLACEHOLDER/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/harshsharma-1804/bruh/main/install.sh | bash
 ```
 
-**From a local clone:**
+### Developer / preview
+
+> Installs from the `develop` branch — may be unstable or incomplete.
 
 ```bash
-git clone https://github.com/BRUH_REPO_PLACEHOLDER
+curl -fsSL https://raw.githubusercontent.com/harshsharma-1804/bruh/develop/install.sh | BRUH_BRANCH=develop bash
+```
+
+### From a local clone
+
+```bash
+git clone https://github.com/harshsharma-1804/bruh
 cd bruh
 bash install.sh
 ```
 
-The installer checks for Homebrew, installs it if missing, installs `jq`, scaffolds `~/tools/bruh/`, and adds the source line to your shell config automatically.
+The installer checks for Homebrew, installs it if missing, installs `jq`, scaffolds the install directory, and adds the source line to your shell config automatically.
 
 ---
 

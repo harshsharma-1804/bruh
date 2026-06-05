@@ -16,7 +16,7 @@
 # ── Release config ────────────────────────────────────────────────────────────
 # Update these two values whenever you cut a new release or switch branches.
 BRUH_GITHUB_REPO="harshsharma-1804/bruh"
-BRUH_GITHUB_BRANCH="develop"   # change to "main" when publishing a stable release
+BRUH_GITHUB_BRANCH="${BRUH_BRANCH:-main}"
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
