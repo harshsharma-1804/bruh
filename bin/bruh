@@ -365,27 +365,31 @@ bruh_goodbye() {
     corepack remove "pnpm@${pnpm_exact}" 2>/dev/null || bruh_warn "Could not remove pnpm"
   fi
 
-  # Shell integration
+  # Shell integration — strip all 3 lines: comment + BRUH_HOME export + source
   bruh_info "Removing shell integration..."
+  local _bruh_escaped
+  _bruh_escaped=$(printf '%s\n' "$BRUH_HOME" | sed 's/[[\.*^$()+?{|]/\\&/g')
   for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.bash_profile"; do
-    if [ -f "$rc" ] && grep -q 'tools/bruh/env/bruh.env' "$rc" 2>/dev/null; then
-      grep -v 'tools/bruh/env/bruh.env' "$rc" > "${rc}.bruh_tmp" \
-        && mv "${rc}.bruh_tmp" "$rc"
-      # Also remove the comment line above it
+    if [ -f "$rc" ] && grep -q 'bruh.env' "$rc" 2>/dev/null; then
       grep -v '# Bruh — runtime environment manager' "$rc" > "${rc}.bruh_tmp" \
+        && mv "${rc}.bruh_tmp" "$rc"
+      grep -v 'export BRUH_HOME=' "$rc" > "${rc}.bruh_tmp" \
+        && mv "${rc}.bruh_tmp" "$rc"
+      grep -v 'source.*bruh.env' "$rc" > "${rc}.bruh_tmp" \
         && mv "${rc}.bruh_tmp" "$rc"
       bruh_ok "Removed from $rc"
     fi
   done
 
-  # Unset env vars
+  # Unset env vars in current session
   bruh_info "Clearing environment variables..."
+  local _bruh_home_save="$BRUH_HOME"
   unset BRUH_HOME NODE_HOME JAVA_HOME PYTHON_HOME GOROOT GOPATH CARGO_HOME RUSTUP_HOME 2>/dev/null || true
-  export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "tools/bruh" | paste -sd ':' -)
+  export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$_bruh_home_save" | paste -sd ':' -)
 
-  # Remove directory
-  bruh_info "Removing ~/tools/bruh/..."
-  rm -rf "$HOME/tools/bruh"
+  # Remove Bruh directory — uses the saved path since BRUH_HOME is now unset
+  bruh_info "Removing ${_bruh_home_save}..."
+  rm -rf "$_bruh_home_save"
 
   printf "\n  ${BRUH_BOLD}${BRUH_GREEN}Bruh is gone. Your system is clean.${BRUH_RESET}\n\n"
 }

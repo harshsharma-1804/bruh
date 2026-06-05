@@ -4,6 +4,10 @@
 #
 # Local clone:
 #   bash install.sh
+#   bash install.sh --dir /your/custom/path
+#
+# Custom path via env var:
+#   BRUH_DIR=/your/custom/path bash install.sh
 #
 # One-line remote (after publishing):
 #   curl -fsSL https://raw.githubusercontent.com/BRUH_REPO_PLACEHOLDER/main/install.sh | bash
@@ -47,13 +51,112 @@ ARCH="$(uname -m)"
 _ok "macOS detected ($ARCH)"
 
 case "$ARCH" in
-  arm64)  HOMEBREW_PREFIX="/opt/homebrew" ;;
-  x86_64) HOMEBREW_PREFIX="/usr/local" ;;
+  arm64)  HOMEBREW_PREFIX="/opt/homebrew" ; BRUH_DEFAULT="/opt/bruh" ;;
+  x86_64) HOMEBREW_PREFIX="/usr/local"   ; BRUH_DEFAULT="/usr/local/bruh" ;;
   *)      _die "Unknown architecture: $ARCH" ;;
 esac
 
 # -----------------------------------------------------------------------------
-# 2. Homebrew
+# 2. Determine install path
+# Resolution order:
+#   1. --dir <path> argument
+#   2. BRUH_DIR environment variable
+#   3. Finder folder picker (GUI — macOS only, skipped in headless/curl-pipe)
+#   4. Arch-aware default (/opt/bruh on arm64, /usr/local/bruh on x86_64)
+# -----------------------------------------------------------------------------
+_bold "Choosing install location..."
+
+BRUH_HOME=""
+
+# -- Check for --dir argument -------------------------------------------------
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dir)
+      shift
+      [ -z "${1:-}" ] && _die "--dir requires a path argument"
+      BRUH_HOME="$1"
+      shift
+      ;;
+    --dir=*)
+      BRUH_HOME="${1#--dir=}"
+      shift
+      ;;
+    *) shift ;;
+  esac
+done
+
+# -- Check BRUH_DIR env var ---------------------------------------------------
+if [ -z "$BRUH_HOME" ] && [ -n "${BRUH_DIR:-}" ]; then
+  BRUH_HOME="$BRUH_DIR"
+fi
+
+# -- Finder picker (only when running interactively, not in curl pipe) --------
+if [ -z "$BRUH_HOME" ]; then
+  # Detect if we have a GUI available (not a headless/pipe session)
+  _GUI_AVAILABLE=false
+  if [ -n "${TERM_PROGRAM:-}" ] || [ -n "${TERM:-}" ] && [ -t 0 ]; then
+    _GUI_AVAILABLE=true
+  fi
+
+  if $_GUI_AVAILABLE; then
+    _info "Opening folder picker — select where to install Bruh..."
+    _info "${_DIM}(Click Cancel to use the default: $BRUH_DEFAULT)${_RESET}"
+    printf "\n"
+
+    _PICKED=""
+    _PICKED=$(osascript 2>/dev/null <<'APPLESCRIPT'
+tell application "Finder"
+  activate
+  set _folder to choose folder with prompt "Select where to install Bruh:" default location (path to home folder)
+  return POSIX path of _folder
+end tell
+APPLESCRIPT
+    ) || _PICKED=""
+
+    if [ -n "$_PICKED" ]; then
+      # Strip trailing slash, then append /bruh
+      _PICKED="${_PICKED%/}"
+      # If user picked a folder already named bruh, use as-is
+      if [ "$(basename "$_PICKED")" = "bruh" ]; then
+        BRUH_HOME="$_PICKED"
+      else
+        BRUH_HOME="${_PICKED}/bruh"
+      fi
+      _ok "Selected: $BRUH_HOME"
+    else
+      _warn "No folder selected. Using default: $BRUH_DEFAULT"
+      BRUH_HOME="$BRUH_DEFAULT"
+    fi
+  else
+    # Headless / curl pipe — skip picker, use default
+    BRUH_HOME="$BRUH_DEFAULT"
+    _info "Non-interactive session detected. Using default: $BRUH_HOME"
+    _info "To choose a custom path: BRUH_DIR=/your/path bash install.sh"
+  fi
+fi
+
+# Ensure BRUH_HOME ends with /bruh
+if [ "$(basename "$BRUH_HOME")" != "bruh" ]; then
+  BRUH_HOME="${BRUH_HOME}/bruh"
+fi
+
+_ok "Install path: $BRUH_HOME"
+
+# -----------------------------------------------------------------------------
+# 3. Reinstall check
+# -----------------------------------------------------------------------------
+if [ -d "$BRUH_HOME/bin" ] && [ -f "$BRUH_HOME/bin/bruh" ]; then
+  _warn "Bruh is already installed at $BRUH_HOME"
+  printf "  Reinstall / update? [y/N] "
+  read -r confirm
+  case "$confirm" in
+    [yY]|[yY][eE][sS]) _info "Proceeding with reinstall..." ;;
+    *) _info "Aborted."; exit 0 ;;
+  esac
+fi
+
+# -----------------------------------------------------------------------------
+# 4. Homebrew
 # -----------------------------------------------------------------------------
 _bold "Checking Homebrew..."
 
@@ -73,7 +176,7 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 3. jq
+# 5. jq
 # -----------------------------------------------------------------------------
 _bold "Checking jq..."
 
@@ -86,24 +189,7 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 4. Install target
-# -----------------------------------------------------------------------------
-BRUH_HOME="$HOME/tools/bruh"
-_bold "Installing Bruh..."
-_info "Target: $BRUH_HOME"
-
-if [ -d "$BRUH_HOME/bin" ] && [ -f "$BRUH_HOME/bin/bruh" ]; then
-  _warn "Bruh is already installed at $BRUH_HOME"
-  printf "  Reinstall / update? [y/N] "
-  read -r confirm
-  case "$confirm" in
-    [yY]|[yY][eE][sS]) _info "Proceeding with reinstall..." ;;
-    *) _info "Aborted."; exit 0 ;;
-  esac
-fi
-
-# -----------------------------------------------------------------------------
-# 5. Source detection — Mode A (local) or Mode B (curl pipe)
+# 6. Source detection — Mode A (local clone) or Mode B (curl pipe)
 # -----------------------------------------------------------------------------
 _bold "Locating source files..."
 
@@ -132,9 +218,11 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 6. Directory structure
+# 7. Directory structure
 # -----------------------------------------------------------------------------
-_info "Creating directory structure..."
+_bold "Scaffolding..."
+_info "Creating directory structure at $BRUH_HOME..."
+
 mkdir -p \
   "$BRUH_HOME/bin" \
   "$BRUH_HOME/lib" \
@@ -148,10 +236,11 @@ mkdir -p \
   "$BRUH_HOME/runtimes/rust" \
   "$BRUH_HOME/runtimes/yarn" \
   "$BRUH_HOME/runtimes/pnpm"
+
 _ok "Directories created."
 
 # -----------------------------------------------------------------------------
-# 7. Copy files
+# 8. Copy files
 # -----------------------------------------------------------------------------
 _info "Copying files..."
 
@@ -172,13 +261,15 @@ cp "$INSTALL_DIR/env/java.env"        "$BRUH_HOME/env/java.env"
 cp "$INSTALL_DIR/env/python.env"      "$BRUH_HOME/env/python.env"
 cp "$INSTALL_DIR/env/go.env"          "$BRUH_HOME/env/go.env"
 cp "$INSTALL_DIR/env/rust.env"        "$BRUH_HOME/env/rust.env"
-[ -f "$INSTALL_DIR/install.sh" ] && cp "$INSTALL_DIR/install.sh" "$BRUH_HOME/install.sh"
-[ -f "$INSTALL_DIR/BRUH.md" ]    && cp "$INSTALL_DIR/BRUH.md"    "$BRUH_HOME/BRUH.md"
+[ -f "$INSTALL_DIR/install.sh" ]  && cp "$INSTALL_DIR/install.sh"  "$BRUH_HOME/install.sh"
+[ -f "$INSTALL_DIR/BRUH.md" ]     && cp "$INSTALL_DIR/BRUH.md"     "$BRUH_HOME/BRUH.md"
+[ -f "$INSTALL_DIR/README.md" ]   && cp "$INSTALL_DIR/README.md"   "$BRUH_HOME/README.md"
+[ -f "$INSTALL_DIR/COMMANDS.md" ] && cp "$INSTALL_DIR/COMMANDS.md" "$BRUH_HOME/COMMANDS.md"
 
 _ok "Files copied."
 
 # -----------------------------------------------------------------------------
-# 8. Registry
+# 9. Registry
 # -----------------------------------------------------------------------------
 if [ ! -f "$BRUH_HOME/registry/state.json" ]; then
   _info "Initialising registry..."
@@ -199,35 +290,49 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 9. Shell integration
+# 10. Shell integration — write 3 lines: comment + BRUH_HOME export + source
 # -----------------------------------------------------------------------------
 _bold "Shell integration..."
 
-SOURCE_LINE='source "$HOME/tools/bruh/env/bruh.env"'
-
-_add_source_line() {
+_add_shell_integration() {
   local rc="$1"
   [ ! -f "$rc" ] && return
-  if grep -qF 'tools/bruh/env/bruh.env' "$rc" 2>/dev/null; then
+
+  # Already integrated — skip
+  if grep -qF "BRUH_HOME=\"${BRUH_HOME}\"" "$rc" 2>/dev/null; then
     _ok "Already present in $rc"
-  else
-    printf "\n# Bruh — runtime environment manager\n%s\n" "$SOURCE_LINE" >> "$rc"
-    _ok "Added to $rc"
+    return
   fi
+
+  # Remove any previous Bruh integration block (different path) cleanly
+  if grep -q 'BRUH_HOME=' "$rc" 2>/dev/null; then
+    _info "Updating existing Bruh entry in $rc..."
+    # Remove old 3-line block: comment, export BRUH_HOME, source bruh.env
+    grep -v '# Bruh — runtime environment manager' "$rc" \
+      | grep -v 'export BRUH_HOME=' \
+      | grep -v 'source.*bruh.env' \
+      > "${rc}.bruh_tmp" && mv "${rc}.bruh_tmp" "$rc"
+  fi
+
+  printf "\n# Bruh — runtime environment manager\nexport BRUH_HOME=\"%s\"\nsource \"%s/env/bruh.env\"\n" \
+    "$BRUH_HOME" "$BRUH_HOME" >> "$rc"
+  _ok "Added to $rc"
 }
 
-[ -f "$HOME/.zshrc" ]        && _add_source_line "$HOME/.zshrc"
-[ -f "$HOME/.bashrc" ]       && _add_source_line "$HOME/.bashrc"
-[ -f "$HOME/.bash_profile" ] && _add_source_line "$HOME/.bash_profile"
+[ -f "$HOME/.zshrc" ]        && _add_shell_integration "$HOME/.zshrc"
+[ -f "$HOME/.bashrc" ]       && _add_shell_integration "$HOME/.bashrc"
+[ -f "$HOME/.bash_profile" ] && _add_shell_integration "$HOME/.bash_profile"
 
-if [ ! -f "$HOME/.zshrc" ] && [ ! -f "$HOME/.bashrc" ]; then
+# No shell config found — create .zshrc
+if [ ! -f "$HOME/.zshrc" ] && [ ! -f "$HOME/.bashrc" ] && [ ! -f "$HOME/.bash_profile" ]; then
   _warn "No shell config found. Creating ~/.zshrc..."
-  printf "# Bruh — runtime environment manager\n%s\n" "$SOURCE_LINE" > "$HOME/.zshrc"
+  printf "# Bruh — runtime environment manager\nexport BRUH_HOME=\"%s\"\nsource \"%s/env/bruh.env\"\n" \
+    "$BRUH_HOME" "$BRUH_HOME" > "$HOME/.zshrc"
   _ok "Created ~/.zshrc"
 fi
 
 # -----------------------------------------------------------------------------
-# 10. Cleanup temp dir (Mode B only)
+# 11. Cleanup temp dir (Mode B only)
 # -----------------------------------------------------------------------------
 [ -n "$_TMP_DIR" ] && [ -d "$_TMP_DIR" ] && rm -rf "$_TMP_DIR"
 
@@ -236,9 +341,11 @@ fi
 # -----------------------------------------------------------------------------
 printf "\n"
 printf "  ${_BOLD}${_GREEN}Bruh is installed.${_RESET}\n"
+printf "  ${_DIM}Installed to: $BRUH_HOME${_RESET}\n"
 printf "\n"
 printf "  ${_BOLD}Activate now:${_RESET}\n"
-printf "  ${_DIM}source ~/tools/bruh/env/bruh.env${_RESET}\n"
+printf "  ${_DIM}export BRUH_HOME=\"$BRUH_HOME\"${_RESET}\n"
+printf "  ${_DIM}source \"$BRUH_HOME/env/bruh.env\"${_RESET}\n"
 printf "\n"
 printf "  ${_BOLD}Then try:${_RESET}\n"
 printf "  ${_DIM}bruh node 22${_RESET}\n"
