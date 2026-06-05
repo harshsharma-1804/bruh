@@ -53,8 +53,8 @@ ARCH="$(uname -m)"
 _ok "macOS detected ($ARCH)"
 
 case "$ARCH" in
-  arm64)  HOMEBREW_PREFIX="/opt/homebrew" ; BRUH_DEFAULT="/opt/bruh" ;;
-  x86_64) HOMEBREW_PREFIX="/usr/local"   ; BRUH_DEFAULT="/usr/local/bruh" ;;
+  arm64)  HOMEBREW_PREFIX="/opt/homebrew" ; BRUH_DEFAULT="$HOME/.bruh" ;;
+  x86_64) HOMEBREW_PREFIX="/usr/local"   ; BRUH_DEFAULT="$HOME/.bruh" ;;
   *)      _die "Unknown architecture: $ARCH" ;;
 esac
 
@@ -63,8 +63,9 @@ esac
 # Resolution order:
 #   1. --dir <path> argument
 #   2. BRUH_DIR environment variable
-#   3. Finder folder picker (GUI — macOS only, skipped in headless/curl-pipe)
-#   4. Arch-aware default (/opt/bruh on arm64, /usr/local/bruh on x86_64)
+#   3. Finder folder picker (GUI — always attempted, fails silently if no display)
+#   4. Terminal prompt (fallback when no GUI but stdout is a terminal)
+#   5. ~/.bruh (fully headless default)
 # -----------------------------------------------------------------------------
 _bold "Choosing install location..."
 
@@ -92,45 +93,45 @@ if [ -z "$BRUH_HOME" ] && [ -n "${BRUH_DIR:-}" ]; then
   BRUH_HOME="$BRUH_DIR"
 fi
 
-# -- Finder picker (only when running interactively, not in curl pipe) --------
+# -- Finder picker (attempted unconditionally — fails silently if no display) -
 if [ -z "$BRUH_HOME" ]; then
-  # Detect if we have a GUI available (not a headless/pipe session)
-  _GUI_AVAILABLE=false
-  if [ -n "${TERM_PROGRAM:-}" ] || [ -n "${TERM:-}" ] && [ -t 0 ]; then
-    _GUI_AVAILABLE=true
-  fi
-
-  if $_GUI_AVAILABLE; then
-    _info "Opening folder picker — select where to install Bruh..."
-    _info "${_DIM}(Click Cancel to use the default: $BRUH_DEFAULT)${_RESET}"
-    printf "\n"
-
-    _PICKED=""
-    _PICKED=$(osascript 2>/dev/null <<'APPLESCRIPT'
+  _PICKED=""
+  _PICKED=$(osascript 2>/dev/null <<'APPLESCRIPT'
 tell application "Finder"
   activate
-  set _folder to choose folder with prompt "Select where to install Bruh:" default location (path to home folder)
+  set _folder to choose folder ¬
+    with prompt "Select where to install Bruh:" ¬
+    default location (path to home folder) ¬
+    cancel button name "Use Default"
   return POSIX path of _folder
 end tell
 APPLESCRIPT
-    ) || _PICKED=""
+  ) || _PICKED=""
 
-    if [ -n "$_PICKED" ]; then
-      # Strip trailing slash, then append /bruh
-      _PICKED="${_PICKED%/}"
-      # If user picked a folder already named bruh, use as-is
-      if [ "$(basename "$_PICKED")" = "bruh" ]; then
-        BRUH_HOME="$_PICKED"
-      else
-        BRUH_HOME="${_PICKED}/bruh"
-      fi
-      _ok "Selected: $BRUH_HOME"
+  if [ -n "$_PICKED" ]; then
+    # Strip trailing slash, then append /bruh if not already named bruh
+    _PICKED="${_PICKED%/}"
+    if [ "$(basename "$_PICKED")" = "bruh" ]; then
+      BRUH_HOME="$_PICKED"
     else
-      _warn "No folder selected. Using default: $BRUH_DEFAULT"
+      BRUH_HOME="${_PICKED}/bruh"
+    fi
+    _ok "Selected: $BRUH_HOME"
+
+  # -- Terminal prompt (no GUI but stdout is a terminal e.g. curl pipe) -------
+  elif [ -t 1 ]; then
+    _info "Default install path: $BRUH_DEFAULT"
+    printf "  Press Enter to accept, or type a custom path: "
+    read -r _CUSTOM_PATH </dev/tty
+    if [ -n "$_CUSTOM_PATH" ]; then
+      BRUH_HOME="$_CUSTOM_PATH"
+    else
       BRUH_HOME="$BRUH_DEFAULT"
     fi
+    _ok "Install path: $BRUH_HOME"
+
+  # -- Fully headless ----------------------------------------------------------
   else
-    # Headless / curl pipe — skip picker, use default
     BRUH_HOME="$BRUH_DEFAULT"
     _info "Non-interactive session detected. Using default: $BRUH_HOME"
     _info "To choose a custom path: BRUH_DIR=/your/path bash install.sh"
