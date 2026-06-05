@@ -9,13 +9,15 @@
 # Custom path via env var:
 #   BRUH_DIR=/your/custom/path bash install.sh
 #
-# One-line remote (after publishing):
-#   curl -fsSL https://raw.githubusercontent.com/BRUH_REPO_PLACEHOLDER/main/install.sh | bash
+# One-line remote:
+#   curl -fsSL https://raw.githubusercontent.com/harshsharma-1804/bruh/develop/install.sh | bash
 # =============================================================================
 
-# PLACEHOLDER — replace with your GitHub repo before publishing e.g. "harshvardhansharma/bruh"
-BRUH_GITHUB_REPO="BRUH_REPO_PLACEHOLDER"
-BRUH_GITHUB_BRANCH="main"
+# ── Release config ────────────────────────────────────────────────────────────
+# Update these two values whenever you cut a new release or switch branches.
+BRUH_GITHUB_REPO="harshsharma-1804/bruh"
+BRUH_GITHUB_BRANCH="develop"   # change to "main" when publishing a stable release
+# ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
