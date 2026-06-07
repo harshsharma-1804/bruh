@@ -416,6 +416,27 @@ bruh_goodbye() {
   bruh_info "Removing ${_bruh_home_save}..."
   rm -rf "$_bruh_home_save"
 
+  # Offer to remove the parent install folder if it is now empty
+  local _parent_dir
+  _parent_dir="$(dirname "$_bruh_home_save")"
+  if [ -d "$_parent_dir" ] && [ "$_parent_dir" != "$HOME" ] && [ -z "$(ls -A "$_parent_dir" 2>/dev/null)" ]; then
+    printf "\n"
+    bruh_info "Install folder is now empty: $_parent_dir"
+    printf "  Remove it too? [y/N] "
+    read -r _rm_parent </dev/tty
+    case "$_rm_parent" in
+      [yY]|[yY][eE][sS])
+        rm -rf "$_parent_dir"
+        bruh_ok "Removed $_parent_dir"
+        ;;
+      *)
+        bruh_info "To remove manually: rm -rf \"$_parent_dir\""
+        ;;
+    esac
+  elif [ -d "$_parent_dir" ] && [ "$_parent_dir" != "$HOME" ]; then
+    bruh_info "To remove install folder: rm -rf \"$_parent_dir\""
+  fi
+
   printf "\n  ${BRUH_BOLD}${BRUH_GREEN}Bruh is gone. Your system is clean.${BRUH_RESET}\n\n"
 }
 
