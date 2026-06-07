@@ -254,6 +254,7 @@ java_set_default() {
   registry_set "java" "default" "$version"
   local provider; provider=$(registry_get_java_provider "$version")
   bruh_ok "Default Java set to $version ($provider)"
+  bruh_info "Run 'source ~/.zshrc' to apply in the current terminal."
   java_activate "$version"
 }
 

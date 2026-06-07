@@ -73,6 +73,7 @@ go_set_default() {
   echo "$version" > "$GO_RUNTIME_HOME/.default"
   registry_set "go" "default" "$version"
   bruh_ok "Default Go set to $version"
+  bruh_info "Run 'source ~/.zshrc' to apply in the current terminal."
   go_activate "$version"
 }
 

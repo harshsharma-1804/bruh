@@ -76,6 +76,7 @@ node_set_default() {
   echo "$version" > "$NODE_RUNTIME_HOME/.default"
   registry_set "node" "default" "$version"
   bruh_ok "Default Node set to $version"
+  bruh_info "Run 'source ~/.zshrc' to apply in the current terminal."
   node_activate "$version"
 }
 

@@ -62,6 +62,7 @@ python_set_default() {
   echo "$version" > "$PYTHON_RUNTIME_HOME/.default"
   registry_set "python" "default" "$version"
   bruh_ok "Default Python set to $version"
+  bruh_info "Run 'source ~/.zshrc' to apply in the current terminal."
   python_activate "$version"
 }
 
