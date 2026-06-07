@@ -276,8 +276,9 @@ _ok "Files copied."
 # -----------------------------------------------------------------------------
 if [ ! -f "$BRUH_HOME/registry/state.json" ]; then
   _info "Initialising registry..."
-  cat > "$BRUH_HOME/registry/state.json" <<'REGISTRY'
+  cat > "$BRUH_HOME/registry/state.json" <<REGISTRY
 {
+  "install_path": "$BRUH_HOME",
   "node":   { "installed": [], "bruh_installed": [], "current": null, "default": null },
   "java":   { "installed": [], "bruh_installed": [], "current": null, "default": null },
   "python": { "installed": [], "bruh_installed": [], "current": null, "default": null },
@@ -346,13 +347,14 @@ printf "\n"
 printf "  ${_BOLD}${_GREEN}Bruh is installed.${_RESET}\n"
 printf "  ${_DIM}Installed to: $BRUH_HOME${_RESET}\n"
 printf "\n"
-printf "  ${_BOLD}Activate now:${_RESET}\n"
-printf "  ${_DIM}export BRUH_HOME=\"$BRUH_HOME\"${_RESET}\n"
-printf "  ${_DIM}source \"$BRUH_HOME/env/bruh.env\"${_RESET}\n"
+printf "  ${_BOLD}──────────────────────────────────────────────────────────────${_RESET}\n"
+printf "  ${_BOLD}Next step — paste this into your terminal to activate now:${_RESET}\n"
+printf "\n"
+printf "  ${_GREEN}export BRUH_HOME=\"$BRUH_HOME\" && source \"$BRUH_HOME/env/bruh.env\"${_RESET}\n"
+printf "\n"
+printf "  ${_DIM}Every new terminal will load Bruh automatically.${_RESET}\n"
+printf "  ${_BOLD}──────────────────────────────────────────────────────────────${_RESET}\n"
 printf "\n"
 printf "  ${_BOLD}Then try:${_RESET}\n"
-printf "  ${_DIM}bruh node 22${_RESET}\n"
-printf "  ${_DIM}bruh java 21${_RESET}\n"
-printf "  ${_DIM}bruh runtimes${_RESET}\n"
-printf "  ${_DIM}bruh help${_RESET}\n"
+printf "  ${_DIM}bruh node 22  ·  bruh java 21  ·  bruh runtimes  ·  bruh help${_RESET}\n"
 printf "\n"

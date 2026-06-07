@@ -74,18 +74,6 @@ The installer checks for Homebrew, installs it if missing, installs `jq`, scaffo
 
 ---
 
-## Activate
-
-After install, activate Bruh in your current terminal without opening a new one:
-
-```bash
-source ~/tools/bruh/env/bruh.env
-```
-
-Every new terminal after that loads Bruh automatically.
-
----
-
 ## Quick Start
 
 ```bash
