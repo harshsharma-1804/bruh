@@ -238,7 +238,8 @@ mkdir -p \
   "$BRUH_HOME/runtimes/go" \
   "$BRUH_HOME/runtimes/rust" \
   "$BRUH_HOME/runtimes/yarn" \
-  "$BRUH_HOME/runtimes/pnpm"
+  "$BRUH_HOME/runtimes/pnpm" \
+  "$BRUH_HOME/runtimes/maven"
 
 _ok "Directories created."
 
@@ -258,12 +259,14 @@ cp "$INSTALL_DIR/providers/go.sh"     "$BRUH_HOME/providers/go.sh"
 cp "$INSTALL_DIR/providers/rust.sh"   "$BRUH_HOME/providers/rust.sh"
 cp "$INSTALL_DIR/providers/yarn.sh"   "$BRUH_HOME/providers/yarn.sh"
 cp "$INSTALL_DIR/providers/pnpm.sh"   "$BRUH_HOME/providers/pnpm.sh"
+cp "$INSTALL_DIR/providers/maven.sh"  "$BRUH_HOME/providers/maven.sh"
 cp "$INSTALL_DIR/env/bruh.env"        "$BRUH_HOME/env/bruh.env"
 cp "$INSTALL_DIR/env/node.env"        "$BRUH_HOME/env/node.env"
 cp "$INSTALL_DIR/env/java.env"        "$BRUH_HOME/env/java.env"
 cp "$INSTALL_DIR/env/python.env"      "$BRUH_HOME/env/python.env"
 cp "$INSTALL_DIR/env/go.env"          "$BRUH_HOME/env/go.env"
-cp "$INSTALL_DIR/env/rust.env"        "$BRUH_HOME/env/rust.env"
+cp "$INSTALL_DIR/env/rust.env"         "$BRUH_HOME/env/rust.env"
+cp "$INSTALL_DIR/env/maven.env"        "$BRUH_HOME/env/maven.env"
 [ -f "$INSTALL_DIR/install.sh" ]  && cp "$INSTALL_DIR/install.sh"  "$BRUH_HOME/install.sh"
 [ -f "$INSTALL_DIR/BRUH.md" ]     && cp "$INSTALL_DIR/BRUH.md"     "$BRUH_HOME/BRUH.md"
 [ -f "$INSTALL_DIR/README.md" ]   && cp "$INSTALL_DIR/README.md"   "$BRUH_HOME/README.md"
@@ -285,7 +288,8 @@ if [ ! -f "$BRUH_HOME/registry/state.json" ]; then
   "go":     { "installed": [], "bruh_installed": [], "current": null, "default": null },
   "rust":   { "installed": [], "bruh_installed": [], "current": null, "default": null },
   "yarn":   { "installed": [], "bruh_installed": [], "current": null, "current_exact": null, "default": null },
-  "pnpm":   { "installed": [], "bruh_installed": [], "current": null, "current_exact": null, "default": null }
+  "pnpm":   { "installed": [], "bruh_installed": [], "current": null, "current_exact": null, "default": null },
+  "maven":  { "installed": [], "bruh_installed": [], "current": null, "default": null }
 }
 REGISTRY
   _ok "Registry initialised."
