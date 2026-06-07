@@ -224,9 +224,14 @@ java_activate() {
     return 1
   fi
 
-  export JAVA_HOME="$jhp"
-  export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '/Contents/Home/bin' | paste -sd ':' -)
-  export PATH="$JAVA_HOME/bin:$PATH"
+  # Write activation exports to .activate_env so the bruh() shell function
+  # wrapper in bruh.env can source them into the current terminal session.
+  {
+    printf 'export JAVA_HOME="%s"\n' "$jhp"
+    printf 'export PATH=$(echo "$PATH" | tr '"'"':'"'"' '"'"'\n'"'"' | grep -v '"'"'/Contents/Home/bin'"'"' | paste -sd '"'"':'"'"' -)\n'
+    printf 'export PATH="$JAVA_HOME/bin:$PATH"\n'
+    printf 'hash -r 2>/dev/null || true\n'
+  } > "$BRUH_HOME/.activate_env"
 
   registry_set "java" "current" "$version"
   local provider; provider=$(registry_get_java_provider "$version")
@@ -249,6 +254,7 @@ java_set_default() {
   registry_set "java" "default" "$version"
   local provider; provider=$(registry_get_java_provider "$version")
   bruh_ok "Default Java set to $version ($provider)"
+  java_activate "$version"
 }
 
 # -----------------------------------------------------------------------------

@@ -52,13 +52,15 @@ go_activate() {
     bruh_err "Go $version not installed. Run: bruh go $version"; return 1
   fi
   ln -sfn "$symlink" "$GO_RUNTIME_HOME/current"
-  export GOROOT="$GO_RUNTIME_HOME/current"
-  export GOPATH="$HOME/go"
-  bruh_path_remove "$GO_RUNTIME_HOME"
-  bruh_path_remove "$GOPATH/bin"
-  export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"
-  hash -r 2>/dev/null || true
   registry_set "go" "current" "$version"
+  # Write activation exports to .activate_env so the bruh() shell function
+  # wrapper in bruh.env can source them into the current terminal session.
+  {
+    printf 'export GOROOT="%s/current"\n' "$GO_RUNTIME_HOME"
+    printf 'export GOPATH="%s/go"\n' "$HOME"
+    printf 'export PATH="$GOROOT/bin:$GOPATH/bin:$PATH"\n'
+    printf 'hash -r 2>/dev/null || true\n'
+  } > "$BRUH_HOME/.activate_env"
   bruh_ok "Using Go $version"
   go version 2>/dev/null || true
 }
@@ -71,6 +73,7 @@ go_set_default() {
   echo "$version" > "$GO_RUNTIME_HOME/.default"
   registry_set "go" "default" "$version"
   bruh_ok "Default Go set to $version"
+  go_activate "$version"
 }
 
 go_remove() {

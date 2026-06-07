@@ -46,8 +46,10 @@ python_activate() {
     bruh_err "Python $version not installed. Run: bruh python $version"; return 1
   fi
   ln -sfn "$symlink" "$PYTHON_RUNTIME_HOME/current"
-  hash -r 2>/dev/null || true
   registry_set "python" "current" "$version"
+  # Write hash -r to .activate_env so the bruh() shell function wrapper in
+  # bruh.env clears the parent shell's command cache after the symlink update.
+  printf 'hash -r 2>/dev/null || true\n' > "$BRUH_HOME/.activate_env"
   bruh_ok "Using Python $version"
   python3 --version 2>/dev/null || true
 }
@@ -60,6 +62,7 @@ python_set_default() {
   echo "$version" > "$PYTHON_RUNTIME_HOME/.default"
   registry_set "python" "default" "$version"
   bruh_ok "Default Python set to $version"
+  python_activate "$version"
 }
 
 python_remove() {

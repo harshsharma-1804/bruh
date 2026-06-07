@@ -60,8 +60,10 @@ node_activate() {
     bruh_err "Node $version not installed. Run: bruh node $version"; return 1
   fi
   ln -sfn "$symlink" "$NODE_RUNTIME_HOME/current"
-  hash -r 2>/dev/null || true
   registry_set "node" "current" "$version"
+  # Write hash -r to .activate_env so the bruh() shell function wrapper in
+  # bruh.env clears the parent shell's command cache after the symlink update.
+  printf 'hash -r 2>/dev/null || true\n' > "$BRUH_HOME/.activate_env"
   bruh_ok "Using Node $version"
   node -v 2>/dev/null || true
 }
@@ -74,6 +76,7 @@ node_set_default() {
   echo "$version" > "$NODE_RUNTIME_HOME/.default"
   registry_set "node" "default" "$version"
   bruh_ok "Default Node set to $version"
+  node_activate "$version"
 }
 
 node_remove() {
