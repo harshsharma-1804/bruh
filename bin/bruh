@@ -22,6 +22,7 @@ source "$BRUH_HOME/providers/go.sh"
 source "$BRUH_HOME/providers/rust.sh"
 source "$BRUH_HOME/providers/yarn.sh"
 source "$BRUH_HOME/providers/pnpm.sh"
+source "$BRUH_HOME/providers/maven.sh"
 
 # -----------------------------------------------------------------------------
 # bruh_status_all
@@ -29,7 +30,7 @@ source "$BRUH_HOME/providers/pnpm.sh"
 bruh_status_all() {
   printf "\n${BRUH_BOLD}  Bruh${BRUH_RESET} — runtime environment manager\n\n"
   bruh_divider
-  local tools="node java python go rust yarn pnpm"
+  local tools="node java python go rust yarn pnpm maven"
   for tool in $tools; do
     local current default
     current=$(registry_get "$tool" "current" 2>/dev/null || echo "")
@@ -54,7 +55,7 @@ bruh_runtimes() {
   printf "\n${BRUH_BOLD}  Runtimes & Tools${BRUH_RESET}\n\n"
   printf "  ${BRUH_BOLD}%-10s %-12s %-12s %-20s${BRUH_RESET}\n" "Tool" "Current" "Default" "Path"
   bruh_divider
-  local tools="node java python go rust yarn pnpm"
+  local tools="node java python go rust yarn pnpm maven"
   for tool in $tools; do
     local current default path_bin
     current=$(registry_get "$tool" "current" 2>/dev/null || echo "—")
@@ -62,13 +63,14 @@ bruh_runtimes() {
     [ "$current" = "null" ] || [ -z "$current" ] && current="—"
     [ "$default" = "null" ] || [ -z "$default" ] && default="—"
     case "$tool" in
-      node)   path_bin=$(command -v node   2>/dev/null || echo "not found") ;;
-      java)   path_bin=$(command -v java   2>/dev/null || echo "not found") ;;
+      node)   path_bin=$(command -v node    2>/dev/null || echo "not found") ;;
+      java)   path_bin=$(command -v java    2>/dev/null || echo "not found") ;;
       python) path_bin=$(command -v python3 2>/dev/null || echo "not found") ;;
-      go)     path_bin=$(command -v go     2>/dev/null || echo "not found") ;;
-      rust)   path_bin=$(command -v rustc  2>/dev/null || echo "not found") ;;
-      yarn)   path_bin=$(command -v yarn   2>/dev/null || echo "not found") ;;
-      pnpm)   path_bin=$(command -v pnpm   2>/dev/null || echo "not found") ;;
+      go)     path_bin=$(command -v go      2>/dev/null || echo "not found") ;;
+      rust)   path_bin=$(command -v rustc   2>/dev/null || echo "not found") ;;
+      yarn)   path_bin=$(command -v yarn    2>/dev/null || echo "not found") ;;
+      pnpm)   path_bin=$(command -v pnpm    2>/dev/null || echo "not found") ;;
+      maven)  path_bin=$(command -v mvn     2>/dev/null || echo "not found") ;;
     esac
     printf "  %-10s %-12s %-12s %-20s\n" "$tool" "$current" "$default" "$path_bin"
   done
@@ -81,7 +83,7 @@ bruh_runtimes() {
 bruh_help() {
   printf "\n"
   printf "${BRUH_BOLD}Bruh${BRUH_RESET} — runtime intent engine\n"
-  printf "${BRUH_DIM}node  java  python  go  rust  yarn  pnpm${BRUH_RESET}\n"
+  printf "${BRUH_DIM}node  java  python  go  rust  yarn  pnpm  maven${BRUH_RESET}\n"
   printf "\n"
 
   # ── SEARCH ──────────────────────────────────────────────────────────────────
@@ -95,6 +97,7 @@ bruh_help() {
   printf "  %-44s  %s\n" "bruh search rust"                  "Available Rust channels"
   printf "  %-44s  %s\n" "bruh search yarn"                  "Available Yarn versions"
   printf "  %-44s  %s\n" "bruh search pnpm"                  "Available pnpm versions"
+  printf "  %-44s  %s\n" "bruh search maven"                 "Available Maven versions"
   printf "\n"
 
   # ── LOOKUP ───────────────────────────────────────────────────────────────────
@@ -107,6 +110,7 @@ bruh_help() {
   printf "  %-44s  %s\n" "bruh lookup rust"                  "Installed Rust toolchains"
   printf "  %-44s  %s\n" "bruh lookup yarn"                  "Installed Yarn versions with exact semver"
   printf "  %-44s  %s\n" "bruh lookup pnpm"                  "Installed pnpm versions with exact semver"
+  printf "  %-44s  %s\n" "bruh lookup maven"                 "Installed Maven versions"
   printf "\n"
 
   # ── INSTALL / ACTIVATE ───────────────────────────────────────────────────────
@@ -141,6 +145,10 @@ bruh_help() {
   printf "  %-44s  %s\n" "bruh pnpm 9"                       "pnpm latest 9.x (global)"
   printf "  %-44s  %s\n" "bruh pnpm 9.1.0"                   "pnpm exact version (global)"
   printf "  %-44s  %s\n" "bruh pnpm latest"                  "pnpm absolute newest"
+  printf "  %-44s  %s\n" "bruh maven 3.9"                    "Maven 3.9 (latest stable)"
+  printf "  %-44s  %s\n" "bruh maven 3.8"                    "Maven 3.8 (LTS line)"
+  printf "  %-44s  %s\n" "bruh maven latest"                 "Newest Maven release"
+  printf "  %-44s  %s\n" "bruh maven stable"                 "Latest stable Maven"
   printf "\n"
   printf "  ${BRUH_DIM}Explicit forms:${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}  bruh install node 22${BRUH_RESET}\n"
@@ -158,6 +166,7 @@ bruh_help() {
   printf "  %-44s  %s\n" "bruh remove rust beta"             "Remove Rust beta toolchain"
   printf "  %-44s  %s\n" "bruh remove yarn 1"                "Remove Yarn v1"
   printf "  %-44s  %s\n" "bruh remove pnpm 8"                "Remove pnpm 8"
+  printf "  %-44s  %s\n" "bruh remove maven 3.8"             "Remove Maven 3.8"
   printf "  ${BRUH_DIM}  bruh uninstall <tool> <version>  (same as remove)${BRUH_RESET}\n"
   printf "\n"
 
@@ -170,6 +179,7 @@ bruh_help() {
   printf "  %-44s  %s\n" "bruh default rust stable"          "Set Rust stable as default"
   printf "  %-44s  %s\n" "bruh default yarn 4"               "Set Yarn 4 as default"
   printf "  %-44s  %s\n" "bruh default pnpm 9"               "Set pnpm 9 as default"
+  printf "  %-44s  %s\n" "bruh default maven 3.9"            "Set Maven 3.9 as default"
   printf "  ${BRUH_DIM}  bruh <tool> default <version>  (same — tool-first form)${BRUH_RESET}\n"
   printf "\n"
 
@@ -187,6 +197,8 @@ bruh_help() {
   printf "  %-44s  %s\n" "bruh update rust"                  "rustup update (all toolchains)"
   printf "  %-44s  %s\n" "bruh update yarn"                  "Update Yarn to latest"
   printf "  %-44s  %s\n" "bruh update pnpm"                  "Update pnpm to latest"
+  printf "  %-44s  %s\n" "bruh update maven"                 "Update Maven to latest"
+  printf "  %-44s  %s\n" "bruh update maven all"             "Update all installed Maven versions"
   printf "\n"
 
   # ── STATUS & INFO ─────────────────────────────────────────────────────────────
@@ -207,6 +219,8 @@ bruh_help() {
   printf "  %-44s  %s\n" "bruh rust where"                   "rustc + cargo paths"
   printf "  %-44s  %s\n" "bruh yarn where"                   "Yarn binary path"
   printf "  %-44s  %s\n" "bruh pnpm where"                   "pnpm binary path"
+  printf "  %-44s  %s\n" "bruh maven"                        "Maven — current, default, MAVEN_HOME, path"
+  printf "  %-44s  %s\n" "bruh maven where"                  "Maven binary path + MAVEN_HOME"
   printf "\n"
 
   # ── PER-PROJECT PINNING ───────────────────────────────────────────────────────
@@ -258,11 +272,13 @@ bruh_search_prompt() {
   printf "  %-10s  %s\n" "rust"   "Available Rust toolchains"
   printf "  %-10s  %s\n" "yarn"   "Available Yarn versions"
   printf "  %-10s  %s\n" "pnpm"   "Available pnpm versions"
+  printf "  %-10s  %s\n" "maven"  "Available Maven versions"
   printf "\n"
   printf "  ${BRUH_BOLD}Usage:${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}bruh search node${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}bruh search java${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}bruh search java 21      (filter to version 21)${BRUH_RESET}\n"
+  printf "  ${BRUH_DIM}bruh search maven${BRUH_RESET}\n"
   printf "\n"
 }
 
@@ -280,6 +296,7 @@ bruh_lookup_all() {
   printf "  %-10s  %s\n" "rust"   "Show installed Rust toolchains"
   printf "  %-10s  %s\n" "yarn"   "Show installed Yarn versions"
   printf "  %-10s  %s\n" "pnpm"   "Show installed pnpm versions"
+  printf "  %-10s  %s\n" "maven"  "Show installed Maven versions"
   printf "\n"
   printf "  ${BRUH_BOLD}Usage:${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}bruh lookup node${BRUH_RESET}\n"
@@ -364,6 +381,14 @@ bruh_goodbye() {
     bruh_info "Removing pnpm $pnpm_exact from corepack..."
     corepack remove "pnpm@${pnpm_exact}" 2>/dev/null || bruh_warn "Could not remove pnpm"
   fi
+
+  # Maven
+  registry_list_bruh_installed "maven" 2>/dev/null | while read -r v; do
+    [ -z "$v" ] && continue
+    bruh_info "Removing Maven $v..."
+    brew uninstall "$(_maven_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Maven $v"
+    rm -f "$MAVEN_RUNTIME_HOME/v${v}" 2>/dev/null || true
+  done
 
   # Shell integration — strip all 3 lines: comment + BRUH_HOME export + source
   bruh_info "Removing shell integration..."

@@ -4,7 +4,7 @@
 # Output: prints "action|tool|version" to stdout
 # =============================================================================
 
-BRUH_TOOLS="node java python go rust yarn pnpm"
+BRUH_TOOLS="node java python go rust yarn pnpm maven"
 
 bruh_normalize() {
   echo "$*" \
@@ -26,6 +26,7 @@ _resolve_tool() {
     rust|cargo)                echo "rust" ;;
     yarn)                      echo "yarn" ;;
     pnpm)                      echo "pnpm" ;;
+    maven|mvn)                 echo "maven" ;;
     *)                         echo "" ;;
   esac
 }
