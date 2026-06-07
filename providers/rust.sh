@@ -61,6 +61,7 @@ rust_set_default() {
   echo "$toolchain" > "$RUST_RUNTIME_HOME/.default"
   registry_set "rust" "default" "$toolchain"
   bruh_ok "Default Rust set to $toolchain"
+  bruh_info "Run 'source ~/.zshrc' to apply in the current terminal."
 }
 
 rust_remove() {
