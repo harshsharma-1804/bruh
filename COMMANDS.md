@@ -15,6 +15,7 @@ Every command Bruh supports, grouped by category.
 | `rust` | `cargo` |
 | `yarn` | — |
 | `pnpm` | — |
+| `maven` | `mvn` |
 
 ---
 
@@ -32,6 +33,7 @@ bruh search go                     # list available Go versions from Homebrew
 bruh search rust                   # list available Rust channels (stable, beta, nightly)
 bruh search yarn                   # list available Yarn versions from npm registry
 bruh search pnpm                   # list available pnpm versions from npm registry
+bruh search maven                  # list available Maven versions from Homebrew
 ```
 
 Installed versions are marked in the search output so you can see what you already have.
@@ -51,6 +53,7 @@ bruh lookup go                     # list installed Go versions
 bruh lookup rust                   # list installed Rust toolchains
 bruh lookup yarn                   # list installed Yarn versions with exact semver
 bruh lookup pnpm                   # list installed pnpm versions with exact semver
+bruh lookup maven                  # list installed Maven versions
 ```
 
 Each `lookup` output shows:
@@ -174,6 +177,17 @@ bruh install pnpm 9
 bruh use pnpm 9
 ```
 
+### Maven
+
+```bash
+bruh maven 3.9                     # latest stable (3.9.x)
+bruh maven 3.8                     # Maven 3.8 LTS line
+bruh maven latest
+bruh maven stable
+bruh install maven 3.9
+bruh use maven 3.9
+```
+
 ---
 
 ## Remove
@@ -187,8 +201,10 @@ bruh remove go 1.22
 bruh remove rust beta
 bruh remove yarn 1
 bruh remove pnpm 8
+bruh remove maven 3.8
 bruh uninstall node 20             # alias for remove
 bruh uninstall java 17
+bruh uninstall maven 3.8
 ```
 
 Cannot remove the currently active default version. Change the default first.
@@ -207,6 +223,7 @@ bruh default go 1.23
 bruh default rust stable
 bruh default yarn 4
 bruh default pnpm 9
+bruh default maven 3.9
 
 bruh node default 22               # same as above — tool first form also works
 bruh java default 21
@@ -215,6 +232,7 @@ bruh go default 1.23
 bruh rust default stable
 bruh yarn default 4
 bruh pnpm default 9
+bruh maven default 3.9
 ```
 
 ---
@@ -243,6 +261,9 @@ bruh update yarn
 bruh update yarn 4
 bruh update pnpm
 bruh update pnpm 9
+bruh update maven
+bruh update maven 3.9
+bruh update maven all
 ```
 
 ---
@@ -268,6 +289,8 @@ bruh go where                      # show Go binary path and GOROOT
 bruh rust where                    # show rustc and cargo paths
 bruh yarn where                    # show Yarn binary path
 bruh pnpm where                    # show pnpm binary path
+bruh maven                         # show Maven current version, default, MAVEN_HOME, path
+bruh maven where                   # show Maven binary path and MAVEN_HOME
 ```
 
 ---
@@ -335,10 +358,10 @@ A full self-removal with no trace left:
 2. Reads registry to build removal plan
 3. Uninstalls runtimes Bruh installed via Homebrew (pre-existing ones are left alone)
 4. Removes Java JVM symlinks from `/Library/Java/JavaVirtualMachines/` (requires sudo — prompts once)
-5. Removes Yarn and pnpm from corepack
+5. Removes Yarn and pnpm from corepack, Maven from Homebrew
 6. Strips the source line from `~/.zshrc` and `~/.bashrc`
 7. Unsets all environment variables in the current session
-8. Deletes `~/tools/bruh/`
+8. Deletes the Bruh install directory
 
 ---
 

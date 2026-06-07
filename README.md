@@ -2,12 +2,13 @@
 
 > Install it. Switch it. Forget the syntax.
 
-Bruh is a runtime and tool environment manager. One command installs, activates, and manages Node, Java, Python, Go, Rust, Yarn, and pnpm — across any version, with no tool-specific syntax to remember.
+Bruh is a runtime and tool environment manager. One command installs, activates, and manages Node, Java, Python, Go, Rust, Yarn, pnpm, and Maven — across any version, with no tool-specific syntax to remember.
 
 ```bash
 bruh node 22
 bruh java 21 temurin
 bruh python 3.12
+bruh maven 3.9
 ```
 
 ---
@@ -23,8 +24,9 @@ Every runtime has its own version manager with its own syntax:
 | `pyenv global 3.12.0` | `bruh python 3.12` |
 | `gvm use go1.23` | `bruh go 1.23` |
 | `rustup default stable` | `bruh rust stable` |
+| `mvn` (manually managed) | `bruh maven 3.9` |
 
-Five tools. Five syntaxes. Five config files. Bruh replaces all of that with a single unified interface. Same command, every tool, every runtime.
+Six tools. Six syntaxes. Six config files. Bruh replaces all of that with a single unified interface. Same command, every tool, every runtime.
 
 **No hidden managers.** Bruh talks directly to Homebrew and rustup. It does not wrap nvm, asdf, sdkman, or any other version manager.
 
@@ -81,6 +83,7 @@ bruh search java          # see all available JDK distributions
 bruh java 21 temurin      # install Java 21 from Temurin
 bruh node 22              # install and activate Node 22
 bruh python 3.12          # install and activate Python 3.12
+bruh maven 3.9            # install and activate Maven 3.9
 bruh runtimes             # see status of all tools
 ```
 
