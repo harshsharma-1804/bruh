@@ -10,7 +10,7 @@ _node_formula() {
     latest|stable|lts) echo "node" ;;
     *)
       if brew info "node@$1" >/dev/null 2>&1; then echo "node@$1"
-      else echo "node"; fi ;;
+      else echo "node_not_found"; fi ;;
   esac
 }
 
@@ -33,17 +33,34 @@ _node_resolve_version() {
 node_install() {
   local version; version=$(_node_resolve_version "$1")
   bruh_require_brew
-  if registry_is_installed "node" "$version"; then
-    bruh_warn "Node $version already installed."; node_activate "$version"; return
-  fi
+  
   local formula; formula=$(_node_formula "$version")
+  if [ "$formula" = "node_not_found" ]; then
+    bruh_err "Node version $version is not available via Homebrew formulas."; return 1
+  fi
+
+  if registry_is_installed "node" "$version"; then
+    # Even if registry says installed, verify the actual binary exists and is the right version
+    local symlink; symlink=$(_node_symlink "$version")
+    if [ -L "$symlink" ] || [ -d "$symlink" ]; then
+      local actual_ver; actual_ver=$("$symlink/bin/node" -v 2>/dev/null | sed 's/v//')
+      if [[ "$actual_ver" == "$version"* ]]; then
+        bruh_warn "Node $version already installed."; node_activate "$version"; return
+      fi
+    fi
+  fi
+
   local brew_path; brew_path=$(_node_brew_path "$formula")
   local symlink; symlink=$(_node_symlink "$version")
   if [ -d "$brew_path" ]; then
-    bruh_info "Node $version found (pre-existing). Registering..."
-    ln -sfn "$brew_path" "$symlink"
-    registry_record_activate "node" "$version"
-    node_activate "$version"; return
+    # Verify this pre-existing path actually matches the requested version
+    local actual_ver; actual_ver=$("$brew_path/bin/node" -v 2>/dev/null | sed 's/v//')
+    if [[ "$actual_ver" == "$version"* ]]; then
+      bruh_info "Node $version found (pre-existing). Registering..."
+      ln -sfn "$brew_path" "$symlink"
+      registry_record_activate "node" "$version"
+      node_activate "$version"; return
+    fi
   fi
   bruh_info "Installing Node $version via Homebrew..."
   brew install "$formula" || bruh_die "Failed to install Node $version"
@@ -60,6 +77,9 @@ node_activate() {
     bruh_err "Node $version not installed. Run: bruh node $version"; return 1
   fi
   ln -sfn "$symlink" "$NODE_RUNTIME_HOME/current"
+  if [ "$(readlink "$NODE_RUNTIME_HOME/current")" != "$symlink" ]; then
+    bruh_err "Failed to update Node symlink to $version"; return 1
+  fi
   registry_set "node" "current" "$version"
   # Write hash -r to .activate_env so the bruh() shell function wrapper in
   # bruh.env clears the parent shell's command cache after the symlink update.
