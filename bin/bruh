@@ -323,9 +323,24 @@ bruh_goodbye() {
 
   local java_versions
   java_versions=$(registry_list_bruh_installed "java" 2>/dev/null || echo "")
+
+  # Java — single sudo call for ALL JVM symlinks, immediately after
+  # authentication, so the credential cache can't expire mid-run and
+  # prompt once per version.
   if [ -n "$java_versions" ]; then
     bruh_info "Java JVM symlinks require sudo. Please authenticate:"
     sudo -v || bruh_die "sudo authentication failed"
+    local _java_links=""
+    for v in $java_versions; do
+      [ -z "$v" ] && continue
+      local jl; jl=$(_java_jvm_link "$v")
+      ( [ -e "$jl" ] || [ -L "$jl" ] ) && _java_links="$_java_links $jl"
+    done
+    if [ -n "$_java_links" ]; then
+      # shellcheck disable=SC2086
+      sudo rm -f $_java_links
+      bruh_ok "Removed JVM symlinks."
+    fi
   fi
 
   # Node — standalone runtimes live entirely in $BRUH_HOME; just delete them
@@ -335,13 +350,11 @@ bruh_goodbye() {
     rm -rf "$NODE_RUNTIME_HOME/v${v}" 2>/dev/null || true
   done
 
-  # Java
+  # Java — brew uninstalls (no sudo needed, can be slow)
   echo "$java_versions" | while read -r v; do
     [ -z "$v" ] && continue
     bruh_info "Removing Java $v..."
     brew uninstall "$(_java_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Java $v"
-    local jl; jl=$(_java_jvm_link "$v")
-    ( [ -e "$jl" ] || [ -L "$jl" ] ) && sudo rm -f "$jl"
   done
 
   # Python
