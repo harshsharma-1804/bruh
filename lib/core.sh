@@ -99,7 +99,7 @@ bruh_require() {
 }
 
 bruh_require_jq() {
-  bruh_require "jq" "Install jq: brew install jq | apt install jq | dnf install jq"
+  bruh_require "jq" "Install it from https://jqlang.github.io/jq/download/"
 }
 
 # -----------------------------------------------------------------------------

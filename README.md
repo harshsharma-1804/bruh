@@ -28,11 +28,13 @@ Every runtime has its own version manager with its own syntax:
 
 Six tools. Six syntaxes. Six config files. Bruh replaces all of that with a single unified interface. Same command, every tool, every runtime.
 
-**No hidden managers.** Bruh downloads official binaries directly from each project (nodejs.org, Adoptium, go.dev, Apache, python-build-standalone) and uses rustup/corepack where they are the official mechanism. It does not wrap nvm, asdf, sdkman, or any other version manager — and it does not need Homebrew.
+**One command to remember.** Node, Java, Python, Go, Rust, Yarn, pnpm, Maven — install, switch, set defaults, and update with the same verb no matter the tool: `bruh <tool> <version>`. No more remembering whether it's `nvm use`, `sdk use`, `pyenv global`, or `rustup default`.
 
-**Provenance tracking.** Bruh remembers what it installed vs what was already on your machine. `bruh goodbye` only removes what Bruh put there — nothing else.
+**Official sources only.** Bruh downloads official binaries directly from each project (nodejs.org, Adoptium, go.dev, Apache, python-build-standalone) and uses rustup/corepack where they are the official mechanism. It does not wrap nvm, asdf, sdkman, or any other version manager.
 
-**JDK provider choice.** For Java, Bruh lets you pick your distribution — Temurin, Corretto, or Oracle — and tracks which provider each version came from. No sudo, no /Library/Java symlinks.
+**Fully self-contained.** Every runtime lives inside Bruh's own directory — switching versions is a symlink flip, and `bruh goodbye` removes everything cleanly. No sudo, ever.
+
+**JDK provider choice.** For Java, Bruh lets you pick your distribution — Temurin, Corretto, or Oracle — and tracks which provider each version came from.
 
 **Search before you install.** `bruh search java` shows every available JDK distribution and provider before you install anything.
 
@@ -60,7 +62,7 @@ cd bruh
 bash install.sh
 ```
 
-The installer installs `jq` if missing, scaffolds the install directory, and adds the source line to your shell config automatically. No Homebrew required.
+The installer downloads `jq` if missing, scaffolds the install directory, and adds the source line to your shell config automatically.
 
 ---
 
@@ -98,7 +100,7 @@ $BRUH_HOME/
 ```
 
 - **Official sources only** — node from nodejs.org, JDKs from Adoptium/Corretto/Oracle, Python from python-build-standalone, Go from go.dev, Maven from Apache, Rust via rustup, Yarn/pnpm via corepack
-- **No Homebrew, no sudo** — installs are archive downloads extracted into your `BRUH_HOME`
+- **No sudo, fully contained** — installs are archive downloads extracted into your `BRUH_HOME`
 - **Activation = one symlink** — switching versions instantly re-points `current`; new terminals load your default automatically
 - **Clean uninstall** — `bruh goodbye` deletes `$BRUH_HOME` and strips the shell integration. Nothing was ever installed outside it (except Rust toolchains, which live in `~/.rustup` via rustup)
 
@@ -118,7 +120,7 @@ See **[COMMANDS.md](./COMMANDS.md)** for every command Bruh supports.
 bruh goodbye
 ```
 
-Removes everything Bruh installed and every trace of itself — no sudo prompts, no Homebrew uninstall loops. Pre-existing runtimes you had before Bruh are not touched.
+Removes everything Bruh installed and every trace of itself. Pre-existing runtimes you had before Bruh are not touched.
 
 ---
 

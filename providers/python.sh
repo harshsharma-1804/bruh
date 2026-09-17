@@ -1,7 +1,7 @@
 # =============================================================================
 # BRUH — providers/python.sh
 # Standalone provider: precompiled CPython from python-build-standalone
-# (github.com/astral-sh/python-build-standalone) — no Homebrew
+# (github.com/astral-sh/python-build-standalone)
 # Layout: $BRUH_HOME/runtimes/python/v<major.minor>   (extracted CPython)
 #         $BRUH_HOME/runtimes/python/current          (symlink → active)
 # =============================================================================

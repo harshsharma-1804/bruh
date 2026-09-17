@@ -356,7 +356,7 @@ A full self-removal with no trace left:
 
 1. Prompts for confirmation
 2. Reads registry to build removal plan
-3. Deletes runtime version directories under `$BRUH_HOME/runtimes/` (node, java, python, go, maven) — no sudo, no Homebrew
+3. Deletes runtime version directories under `$BRUH_HOME/runtimes/` (node, java, python, go, maven) — no sudo needed
 4. Uninstalls Rust toolchains via rustup, and removes Yarn/pnpm from corepack
 5. Strips the source line from `~/.zshrc` and `~/.bashrc`
 6. Unsets all environment variables in the current session

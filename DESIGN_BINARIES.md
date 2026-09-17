@@ -1,10 +1,9 @@
 # BRUH: Zero-Dependency Version Management Plan
 
 ## 1. Objective
-Transition BRUH from a Homebrew-dependent wrapper to a standalone binary manager. This ensures total isolation, support for any version, and a 100% clean uninstall (`bruh goodbye`).
+Transition BRUH to a standalone binary manager that downloads official release artifacts directly. This ensures total isolation, support for any version, and a 100% clean uninstall (`bruh goodbye`).
 
 ## 2. Core Architecture Change
-**Current Flow**: `bruh` $\to$ `brew install` $\to$ `/opt/homebrew/Cellar` $\to$ Symlink.
 **New Flow**: `bruh` $\to$ `curl/wget` (official binary) $\to$ `$BRUH_HOME/runtimes/[tool]/[version]` $\to$ Symlink.
 
 ## 3. Implementation Phases
@@ -41,10 +40,10 @@ Each provider in `providers/*.sh` will be rewritten to use the new infrastructur
 - The uninstall process will be reduced to:
   1. Remove shell integration from `.zshrc` / `.bashrc`.
   2. `rm -rf "$BRUH_HOME"`.
-- No more `sudo` or `brew uninstall` loops.
+- No `sudo` anywhere — everything lives inside `$BRUH_HOME`.
 
 ## 4. Expected Outcome
-- **Zero Dependencies**: No need for Homebrew to be installed.
+- **Zero Dependencies**: No package manager required.
 - **Absolute Isolation**: Tools are contained entirely within the BRUH directory.
 - **Instant Switching**: Symlinks are updated locally without affecting system-wide paths.
 - **Clean State**: System remains pristine after `bruh goodbye`.

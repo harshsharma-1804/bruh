@@ -161,34 +161,30 @@ if [ -d "$BRUH_HOME/bin" ] && [ -f "$BRUH_HOME/bin/bruh" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 4. jq (only external dependency)
+# 4. jq (only external dependency) — downloaded directly into $BRUH_HOME/bin,
+#    no package manager and no sudo required
 # -----------------------------------------------------------------------------
+JQ_VERSION="1.7.1"
 _bold "Checking jq..."
 
-if command -v jq >/dev/null 2>&1; then
-  _ok "jq found ($(jq --version))"
+if command -v jq >/dev/null 2>&1 || [ -x "$BRUH_HOME/bin/jq" ]; then
+  _ok "jq found ($(jq --version 2>/dev/null || "$BRUH_HOME/bin/jq" --version))"
 else
-  _info "Installing jq..."
-  case "$OS" in
-    Darwin)
-      command -v brew >/dev/null 2>&1 \
-        && brew install jq \
-        || _die "jq is required. Install it from https://jqlang.github.io/jq/download/ and re-run."
-      ;;
-    Linux)
-      if command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get update -qq && sudo apt-get install -y jq
-      elif command -v dnf >/dev/null 2>&1; then
-        sudo dnf install -y jq
-      elif command -v pacman >/dev/null 2>&1; then
-        sudo pacman -S --noconfirm jq
-      else
-        _die "jq is required. Install it from https://jqlang.github.io/jq/download/ and re-run."
-      fi
-      ;;
+  _info "Downloading jq..."
+  mkdir -p "$BRUH_HOME/bin"
+  case "$(uname -s)/$(uname -m)" in
+    Darwin/arm64)  JQ_ASSET="jq-macos-arm64" ;;
+    Darwin/x86_64) JQ_ASSET="jq-macos-amd64" ;;
+    Linux/x86_64)  JQ_ASSET="jq-linux-amd64" ;;
+    Linux/arm64|Linux/aarch64) JQ_ASSET="jq-linux-arm64" ;;
+    *) _die "Unsupported platform for jq. Install it from https://jqlang.github.io/jq/download/ and re-run." ;;
   esac
-  command -v jq >/dev/null 2>&1 || _die "jq installation failed."
-  _ok "jq installed."
+  curl -fsSL "https://github.com/jqlang/jq/releases/download/jq-${JQ_VERSION}/${JQ_ASSET}" \
+    -o "$BRUH_HOME/bin/jq" \
+    || _die "Failed to download jq. Install it from https://jqlang.github.io/jq/download/ and re-run."
+  chmod +x "$BRUH_HOME/bin/jq"
+  "$BRUH_HOME/bin/jq" --version >/dev/null 2>&1 || _die "jq binary failed verification."
+  _ok "jq installed to $BRUH_HOME/bin/jq"
 fi
 
 # -----------------------------------------------------------------------------
