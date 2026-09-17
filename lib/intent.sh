@@ -102,10 +102,16 @@ bruh_parse_intent() {
 
   # ── Top-level fixed commands ─────────────────────────────────────────────────
   case "$t1" in
-    goodbye|bye)           echo "goodbye||";  return ;;
-    help|--help|-h)        echo "help||";     return ;;
-    runtimes|tools)        echo "runtimes||"; return ;;
+    goodbye|bye)                     echo "goodbye||";  return ;;
+    help|--help|-h)                  echo "help||";     return ;;
+    runtimes|tools)                  echo "runtimes||"; return ;;
+    upgrade|self-update|update-bruh) echo "upgrade||";  return ;;
   esac
+
+  # ── update bruh — self-update, same as `bruh upgrade` ────────────────────────
+  if [ "$(_resolve_action "$t1")" = "update" ] && [ "$t2" = "bruh" ]; then
+    echo "upgrade||"; return
+  fi
 
   # ── search <tool> [version] — top-level search ───────────────────────────────
   if [ "$t1" = "search" ]; then

@@ -3,6 +3,10 @@
 # Shared utilities: colours, logging, OS/arch detection, guards
 # =============================================================================
 
+# Bumped at every release. `bruh upgrade` compares this against the
+# latest GitHub release tag.
+BRUH_VERSION="1.1.0"
+
 # -----------------------------------------------------------------------------
 # Colours
 # -----------------------------------------------------------------------------
@@ -48,6 +52,32 @@ bruh_die() {
 
 bruh_divider() {
   printf "  ${BRUH_DIM}─────────────────────────────────────${BRUH_RESET}\n"
+}
+
+# -----------------------------------------------------------------------------
+# Release channels & versioning
+# -----------------------------------------------------------------------------
+# stable → releases tagged on main;  beta → pre-releases published from develop
+bruh_channel() {
+  case "${BRUH_CHANNEL:-stable}" in
+    beta|dev|develop) echo "beta" ;;
+    *)                echo "stable" ;;
+  esac
+}
+
+# Prints 0 if equal, 1 if $1 > $2, -1 if $1 < $2 (semver x.y.z, ignores -beta.N)
+bruh_vercmp() {
+  local a b
+  a=$(echo "$1" | sed 's/^v//;s/-.*//')
+  b=$(echo "$2" | sed 's/^v//;s/-.*//')
+  local a1 a2 a3 b1 b2 b3
+  a1=$(echo "$a" | cut -d. -f1); a2=$(echo "$a" | cut -d. -f2); a3=$(echo "$a" | cut -d. -f3)
+  b1=$(echo "$b" | cut -d. -f1); b2=$(echo "$b" | cut -d. -f2); b3=$(echo "$b" | cut -d. -f3)
+  a2=${a2:-0}; a3=${a3:-0}; b2=${b2:-0}; b3=${b3:-0}
+  if [ "$a1" -ne "$b1" ]; then [ "$a1" -gt "$b1" ] && echo 1 || echo -1; return; fi
+  if [ "$a2" -ne "$b2" ]; then [ "$a2" -gt "$b2" ] && echo 1 || echo -1; return; fi
+  if [ "$a3" -ne "$b3" ]; then [ "$a3" -gt "$b3" ] && echo 1 || echo -1; return; fi
+  echo 0
 }
 
 # -----------------------------------------------------------------------------

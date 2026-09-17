@@ -350,6 +350,22 @@ bruh runtimes                      # show all tools in a status table
 bruh goodbye                       # uninstall Bruh and everything it installed
 ```
 
+### `bruh upgrade`
+
+Update Bruh itself to the latest GitHub release:
+
+```bash
+bruh upgrade              # latest stable release
+bruh upgrade --beta       # latest pre-release (beta channel)
+BRUH_CHANNEL=beta bruh upgrade   # same, via environment variable
+```
+
+- Compares your installed version against the latest release tag
+- Only code files are synced — installed runtimes, defaults, and the registry are untouched
+- Also accepts: `bruh update bruh`, `bruh self-update`
+
+---
+
 ### `bruh goodbye`
 
 A full self-removal with no trace left:

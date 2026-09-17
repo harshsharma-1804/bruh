@@ -207,9 +207,22 @@ else
   [ "$BRUH_GITHUB_REPO" = "BRUH_REPO_PLACEHOLDER" ] && \
     _die "install.sh has no GitHub repo configured.\nSet BRUH_GITHUB_REPO at the top of this file before publishing."
 
-  _info "Downloading Bruh from github.com/${BRUH_GITHUB_REPO}..."
+  # Channel: stable (default) installs from the release branch; beta installs
+  # the newest pre-release tag published from develop.
+  BRUH_CHANNEL="${BRUH_CHANNEL:-stable}"
   _TMP_DIR="$(mktemp -d)"
-  ARCHIVE_URL="https://github.com/${BRUH_GITHUB_REPO}/archive/refs/heads/${BRUH_GITHUB_BRANCH}.tar.gz"
+  if [ "$BRUH_CHANNEL" = "beta" ]; then
+    _info "Resolving latest beta (pre-release)..."
+    _TAG=$(curl -fsSL "https://api.github.com/repos/${BRUH_GITHUB_REPO}/releases" 2>/dev/null \
+      | jq -r '[.[] | select(.prerelease)][0].tag_name' 2>/dev/null)
+    [ -z "$_TAG" ] || [ "$_TAG" = "null" ] && \
+      _die "No beta releases found. Install stable: BRUH_CHANNEL=stable bash install.sh"
+    ARCHIVE_URL="https://github.com/${BRUH_GITHUB_REPO}/archive/refs/tags/${_TAG}.tar.gz"
+    _info "Downloading Bruh ${_TAG} (beta)..."
+  else
+    _info "Downloading Bruh from github.com/${BRUH_GITHUB_REPO}..."
+    ARCHIVE_URL="https://github.com/${BRUH_GITHUB_REPO}/archive/refs/heads/${BRUH_GITHUB_BRANCH}.tar.gz"
+  fi
   curl -fsSL "$ARCHIVE_URL" | tar -xz -C "$_TMP_DIR" --strip-components=1 \
     || _die "Failed to download from $ARCHIVE_URL"
   INSTALL_DIR="$_TMP_DIR"
