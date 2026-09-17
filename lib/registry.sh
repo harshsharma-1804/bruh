@@ -104,6 +104,20 @@ registry_record_activate() {
 }
 
 # -----------------------------------------------------------------------------
+# Runtime verification — "installed" means the binary actually exists on disk
+# inside $BRUH_HOME, not just that a registry flag was set.
+# -----------------------------------------------------------------------------
+registry_runtime_dir() { # registry_runtime_dir <tool> <version>
+  echo "$BRUH_HOME/runtimes/$1/v$2"
+}
+
+registry_verify() { # registry_verify <tool> <version> <binary-subpath e.g. bin/node>
+  local dir
+  dir=$(registry_runtime_dir "$1" "$2")
+  [ -n "$3" ] && [ -e "$dir/$3" ]
+}
+
+# -----------------------------------------------------------------------------
 # Java provider tracking
 # Stores which provider (temurin, openjdk, etc.) was used per version
 # Uses the java.providers object: { "21": "temurin", "17": "openjdk" }

@@ -9,7 +9,8 @@ BRUH_TOOLS="node java python go rust yarn pnpm maven"
 bruh_normalize() {
   echo "$*" \
     | tr '[:upper:]' '[:lower:]' \
-    | sed 's/[!?,.]//g' \
+    | sed 's/[!?]//g' \
+    | sed 's/[,.]*$//' \
     | sed 's/\bplease\b//g' \
     | sed 's/\bfor me\b//g' \
     | sed 's/\bme\b//g' \

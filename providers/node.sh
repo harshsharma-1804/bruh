@@ -1,122 +1,181 @@
 # =============================================================================
 # BRUH — providers/node.sh
+# Standalone provider: official binaries from nodejs.org (no Homebrew)
+# Layout: $BRUH_HOME/runtimes/node/v<major>  (real dir, extracted tarball)
+#         $BRUH_HOME/runtimes/node/current   (symlink → active v<major>)
 # =============================================================================
 
 NODE_RUNTIME_HOME="$BRUH_HOME/runtimes/node"
-HOMEBREW_PREFIX="${HOMEBREW_PREFIX:-$(bruh_homebrew_prefix)}"
+NODE_DIST_URL="https://nodejs.org/dist"
 
-_node_formula() {
-  case "$1" in
-    latest|stable|lts) echo "node" ;;
-    *)
-      if brew info "node@$1" >/dev/null 2>&1; then echo "node@$1"
-      else echo "node_not_found"; fi ;;
-  esac
+# -----------------------------------------------------------------------------
+# Catalog helpers
+# -----------------------------------------------------------------------------
+_node_catalog() {
+  curl -fsSL "$NODE_DIST_URL/index.json" 2>/dev/null \
+    || bruh_die "Could not fetch Node version catalog. Check your connection."
 }
 
-_node_symlink()   { echo "$NODE_RUNTIME_HOME/v$1"; }
-_node_brew_path() { echo "$HOMEBREW_PREFIX/opt/$1"; }
+_node_query() {
+  _node_catalog | jq -r "$1" 2>/dev/null
+}
 
-_node_resolve_version() {
-  case "$1" in
+# -----------------------------------------------------------------------------
+# Version resolution
+# -----------------------------------------------------------------------------
+# Resolve user input → full version WITH 'v' prefix (e.g. v22.14.0)
+# Accepts: latest | stable | lts | <major> | <major.minor.patch>
+_node_resolve_full() {
+  local req="${1:-}"
+  case "$req" in
     latest)
-      brew info --json=v2 node 2>/dev/null | jq -r '.formulae[0].versions.stable' | cut -d'.' -f1 ;;
+      _node_query '.[0].version'
+      ;;
     stable|lts)
-      local ver
-      ver=$(brew info --json=v2 node 2>/dev/null | jq -r '.formulae[0].versions.stable' | cut -d'.' -f1)
-      while [ $(( ver % 2 )) -ne 0 ]; do ver=$(( ver - 1 )); done
-      echo "$ver" ;;
-    *) echo "$1" ;;
+      _node_query '[.[] | select(.lts != false)][0].version'
+      ;;
+    *)
+      local v="${req#v}"
+      case "$v" in
+        # Exact semver — use as-is
+        *.*)
+          case "$v" in
+            *[!0-9.]*) echo ""; return ;;
+            *)         echo "v$v" ;;
+          esac
+          ;;
+        # Major only — validate numeric, resolve to latest in that line
+        '')
+          echo ""; return ;;
+        *[!0-9]*)
+          echo ""; return ;;
+        *)
+          _node_query "[.[] | select(.version | startswith(\"v$v.\"))][0].version"
+          ;;
+      esac
+      ;;
   esac
 }
 
-node_install() {
-  local version; version=$(_node_resolve_version "$1")
-  bruh_require_brew
-  
-  local formula; formula=$(_node_formula "$version")
-  if [ "$formula" = "node_not_found" ]; then
-    bruh_err "Node version $version is not available via Homebrew formulas."; return 1
-  fi
-
-  if registry_is_installed "node" "$version"; then
-    # Even if registry says installed, verify the actual binary exists and is the right version
-    local symlink; symlink=$(_node_symlink "$version")
-    if [ -L "$symlink" ] || [ -d "$symlink" ]; then
-      local actual_ver; actual_ver=$("$symlink/bin/node" -v 2>/dev/null | sed 's/v//')
-      if [[ "$actual_ver" == "$version"* ]]; then
-        bruh_warn "Node $version already installed."; node_activate "$version"; return
-      fi
-    fi
-  fi
-
-  local brew_path; brew_path=$(_node_brew_path "$formula")
-  local symlink; symlink=$(_node_symlink "$version")
-  if [ -d "$brew_path" ]; then
-    # Verify this pre-existing path actually matches the requested version
-    local actual_ver; actual_ver=$("$brew_path/bin/node" -v 2>/dev/null | sed 's/v//')
-    if [[ "$actual_ver" == "$version"* ]]; then
-      bruh_info "Node $version found (pre-existing). Registering..."
-      ln -sfn "$brew_path" "$symlink"
-      registry_record_activate "node" "$version"
-      node_activate "$version"; return
-    fi
-  fi
-  bruh_info "Installing Node $version via Homebrew..."
-  brew install "$formula" || bruh_die "Failed to install Node $version"
-  ln -sfn "$brew_path" "$symlink"
-  registry_record_install "node" "$version"
-  bruh_ok "Node $version installed."
-  node_activate "$version"
+# Resolve user input → major version (registry + symlink key)
+_node_resolve_version() {
+  local full
+  full=$(_node_resolve_full "$1")
+  [ -z "$full" ] || [ "$full" = "null" ] && { echo ""; return; }
+  bruh_major_version "${full#v}"
 }
 
+# -----------------------------------------------------------------------------
+# Install
+# -----------------------------------------------------------------------------
+node_install() {
+  local platform; platform=$(bruh_platform)
+  [ "$platform" = "unsupported" ] && \
+    bruh_die "Unsupported platform: $(uname -s)/$(uname -m)"
+
+  local full; full=$(_node_resolve_full "$1")
+  if [ -z "$full" ] || [ "$full" = "null" ]; then
+    bruh_err "Node version '$1' not found. Try: bruh search node"; return 1
+  fi
+  local major; major=$(bruh_major_version "${full#v}")
+
+  local dir="$NODE_RUNTIME_HOME/v$major"
+
+  # Already installed and healthy?
+  if registry_is_installed "node" "$major" && registry_verify "node" "$major" "bin/node"; then
+    local actual; actual=$("$dir/bin/node" -v 2>/dev/null)
+    if [ "$actual" = "$full" ]; then
+      bruh_warn "Node $major already installed ($full)."
+      node_activate "$major"; return
+    fi
+    bruh_info "Node $major is stale ($actual) — updating to $full..."
+  fi
+
+  local url="$NODE_DIST_URL/$full/node-$full-$platform.tar.gz"
+  local tmp_tar="$NODE_RUNTIME_HOME/.node-$full.tar.gz"
+  mkdir -p "$NODE_RUNTIME_HOME"
+
+  bruh_info "Downloading Node $full ($platform)..."
+  if ! bruh_download "$url" "$tmp_tar"; then
+    rm -f "$tmp_tar"
+    bruh_err "Failed to download $url"; return 1
+  fi
+
+  bruh_info "Extracting to $dir..."
+  rm -rf "$dir"
+  if ! bruh_extract "$tmp_tar" "$dir" 1; then
+    rm -rf "$dir" "$tmp_tar"
+    bruh_err "Failed to extract Node archive."; return 1
+  fi
+  rm -f "$tmp_tar"
+
+  # Verify the binary actually runs before registering
+  "$dir/bin/node" -v >/dev/null 2>&1 || { rm -rf "$dir"; bruh_err "Node binary failed verification."; return 1; }
+
+  registry_record_install "node" "$major"
+  bruh_ok "Node $full installed."
+  node_activate "$major"
+}
+
+# -----------------------------------------------------------------------------
+# Activate
+# -----------------------------------------------------------------------------
 node_activate() {
-  local version; version=$(_node_resolve_version "$1")
-  local symlink; symlink=$(_node_symlink "$version")
-  if [ ! -L "$symlink" ] && [ ! -d "$symlink" ]; then
-    bruh_err "Node $version not installed. Run: bruh node $version"; return 1
+  local major; major=$(_node_resolve_version "$1")
+  if [ -z "$major" ]; then
+    bruh_err "Unknown Node version: $1"; return 1
   fi
-  ln -sfn "$symlink" "$NODE_RUNTIME_HOME/current"
-  if [ "$(readlink "$NODE_RUNTIME_HOME/current")" != "$symlink" ]; then
-    bruh_err "Failed to update Node symlink to $version"; return 1
+  local dir="$NODE_RUNTIME_HOME/v$major"
+  if [ ! -d "$dir" ] || ! registry_verify "node" "$major" "bin/node"; then
+    bruh_err "Node $major not installed. Run: bruh node $major"; return 1
   fi
-  registry_set "node" "current" "$version"
+  ln -sfn "$dir" "$NODE_RUNTIME_HOME/current"
+  if [ "$(readlink "$NODE_RUNTIME_HOME/current")" != "$dir" ]; then
+    bruh_err "Failed to update Node symlink to $major"; return 1
+  fi
+  registry_set "node" "current" "$major"
   # Write hash -r to .activate_env so the bruh() shell function wrapper in
   # bruh.env clears the parent shell's command cache after the symlink update.
   printf 'hash -r 2>/dev/null || true\n' > "$BRUH_HOME/.activate_env"
-  bruh_ok "Using Node $version"
-  node -v 2>/dev/null || true
+  bruh_ok "Using Node $major"
+  "$dir/bin/node" -v 2>/dev/null || true
 }
 
+# -----------------------------------------------------------------------------
+# Default
+# -----------------------------------------------------------------------------
 node_set_default() {
-  local version; version=$(_node_resolve_version "$1")
-  if ! registry_is_installed "node" "$version"; then
-    bruh_err "Node $version not installed."; return 1
+  local major; major=$(_node_resolve_version "$1")
+  if [ -z "$major" ] || ! registry_is_installed "node" "$major"; then
+    bruh_err "Node $1 not installed."; return 1
   fi
-  echo "$version" > "$NODE_RUNTIME_HOME/.default"
-  registry_set "node" "default" "$version"
-  bruh_ok "Default Node set to $version"
+  echo "$major" > "$NODE_RUNTIME_HOME/.default"
+  registry_set "node" "default" "$major"
+  bruh_ok "Default Node set to $major"
   bruh_info "Run 'source ~/.zshrc' to apply in the current terminal."
-  node_activate "$version"
+  node_activate "$major"
 }
 
+# -----------------------------------------------------------------------------
+# Remove — just delete the version directory
+# -----------------------------------------------------------------------------
 node_remove() {
-  local version; version=$(_node_resolve_version "$1")
+  local major; major=$(_node_resolve_version "$1")
   local default; default=$(registry_get "node" "default")
-  if [ "$default" = "$version" ]; then
-    bruh_err "Node $version is the default. Change default first."; return 1
+  if [ "$default" = "$major" ]; then
+    bruh_err "Node $major is the default. Change default first."; return 1
   fi
-  if ! registry_is_installed "node" "$version"; then
-    bruh_err "Node $version not installed under Bruh."; return 1
+  if ! registry_is_installed "node" "$major"; then
+    bruh_err "Node $major not installed under Bruh."; return 1
   fi
-  if registry_is_bruh_installed "node" "$version"; then
-    brew uninstall "$(_node_formula "$version")" || bruh_warn "Homebrew uninstall failed."
-  fi
-  rm -f "$(_node_symlink "$version")" 2>/dev/null || true
-  registry_remove_installed "node" "$version"
-  bruh_ok "Node $version removed."
+  rm -rf "$NODE_RUNTIME_HOME/v$major"
+  registry_remove_installed "node" "$major"
+  bruh_ok "Node $major removed."
 }
 
+# -----------------------------------------------------------------------------
+# Lookup
+# -----------------------------------------------------------------------------
 node_lookup() {
   bruh_header "Installed Node versions"
   bruh_divider
@@ -138,7 +197,9 @@ node_lookup() {
   echo "$installed" | while read -r v; do
     [ -z "$v" ] && continue
     local status=""
-    if [ "$v" = "$current" ] && [ "$v" = "$default" ]; then
+    if ! registry_verify "node" "$v" "bin/node"; then
+      status="${BRUH_RED}(missing — reinstall)${BRUH_RESET}"
+    elif [ "$v" = "$current" ] && [ "$v" = "$default" ]; then
       status="${BRUH_GREEN}▸ active  ${BRUH_RESET}${BRUH_BLUE}(default)${BRUH_RESET}"
     elif [ "$v" = "$current" ]; then
       status="${BRUH_GREEN}▸ active${BRUH_RESET}"
@@ -157,6 +218,9 @@ node_lookup() {
   printf "\n"
 }
 
+# -----------------------------------------------------------------------------
+# Search — list available versions from the nodejs.org catalog
+# -----------------------------------------------------------------------------
 node_search() {
   local filter="${1:-}"
   bruh_header "Available Node.js versions"
@@ -164,32 +228,24 @@ node_search() {
 
   local current; current=$(registry_get "node" "current")
 
-  printf "  ${BRUH_BOLD}%-10s  %-22s  %s${BRUH_RESET}\n" "Version" "Formula" "Status"
-  printf "  %-10s  %-22s  %s\n" "─────────" "─────────────────────" "──────────────"
+  printf "  ${BRUH_BOLD}%-8s  %-12s  %-12s  %s${BRUH_RESET}\n" "Version" "Release" "LTS" "Status"
+  printf "  %-8s  %-12s  %-12s  %s\n" "───────" "───────────" "───────────" "──────────────"
 
-  # Versioned formulae from Homebrew
-  local formulae
-  formulae=$(brew search '/node@/' 2>/dev/null | grep -E '^node@' | sort -V)
-
-  echo "$formulae" | while read -r formula; do
-    [ -z "$formula" ] && continue
-    local ver; ver=$(echo "$formula" | grep -oE '[0-9]+')
-    [ -n "$filter" ] && [ "$filter" != "$ver" ] && continue
+  _node_catalog | jq -r '
+    reduce .[] as $e ({};
+      .[($e.version | ltrimstr("v") | split(".")[0])] //= $e)
+    | to_entries[]
+    | "\(.key)\t\(.value.version | ltrimstr("v"))\t\(if .value.lts then .value.lts else "" end)"
+  ' 2>/dev/null | sort -rn | while IFS=$'\t' read -r major full lts; do
+    [ -n "$filter" ] && [ "$filter" != "$major" ] && continue
     local status=""
-    registry_is_installed "node" "$ver" && {
-      [ "$ver" = "$current" ] \
+    registry_is_installed "node" "$major" && {
+      [ "$major" = "$current" ] \
         && status="${BRUH_GREEN}▸ installed (active)${BRUH_RESET}" \
         || status="${BRUH_BLUE}✓ installed${BRUH_RESET}"
     }
-    printf "  %-10s  %-22s  %b\n" "$ver" "$formula" "$status"
-  done
-
-  # Latest (unversioned)
-  [ -z "$filter" ] && {
-    local status=""
-    registry_is_installed "node" "latest" && status="${BRUH_BLUE}✓ installed${BRUH_RESET}"
-    printf "  %-10s  %-22s  %b\n" "latest" "node" "$status"
-  }
+    printf "  %-8s  %-12s  %-12s  %b\n" "$major" "$full" "${lts:--}" "${status:-}"
+  done || true
 
   printf "\n"
   printf "  ${BRUH_BOLD}Install with:${BRUH_RESET}\n"
@@ -214,6 +270,8 @@ node_installed() {
 
 node_locate() {
   bruh_header "Node location"
+  local dir="$NODE_RUNTIME_HOME/current"
+  bruh_log "Home   : $([ -d "$dir" ] && echo "$dir" || echo 'not installed')"
   bruh_log "Binary : $(command -v node 2>/dev/null || echo 'not found')"
   bruh_log "Version: $(node -v 2>/dev/null || echo 'n/a')"
   bruh_log "npm    : $(command -v npm 2>/dev/null || echo 'not found')"
@@ -221,25 +279,49 @@ node_locate() {
 
 node_status() {
   bruh_header "Node"
-  bruh_log "Current : $(registry_get node current || echo 'not set') ($(node -v 2>/dev/null || echo n/a))"
+  local current; current=$(registry_get node current)
+  local dir="$NODE_RUNTIME_HOME/v${current:-}"
+  bruh_log "Current : ${current:-not set} ($(node -v 2>/dev/null || echo n/a))"
   bruh_log "Default : $(registry_get node default || echo 'not set')"
   bruh_log "Path    : $(command -v node 2>/dev/null || echo 'not found')"
+  bruh_log "Home    : $([ -d "$dir" ] && echo "$dir" || echo 'not installed')"
 }
 
+# -----------------------------------------------------------------------------
+# Update — re-resolve latest in each installed major line and refresh if stale
+# -----------------------------------------------------------------------------
 node_update() {
   local version="${1:-}"
+  local majors
   if [ -z "$version" ] || [ "$version" = "all" ]; then
-    registry_list_installed "node" | while read -r v; do
-      brew upgrade "$(_node_formula "$v")" 2>/dev/null || bruh_warn "Node $v already up to date."
-    done
+    majors=$(registry_list_installed "node")
+    if [ -z "$majors" ]; then
+      bruh_warn "No Node versions installed."; return 0
+    fi
   else
-    brew upgrade "$(_node_formula "$version")" 2>/dev/null || bruh_warn "Node $version already up to date."
+    majors=$(_node_resolve_version "$version")
   fi
+
+  echo "$majors" | while read -r m; do
+    [ -z "$m" ] && continue
+    local latest_full; latest_full=$(_node_resolve_full "$m")
+    local current_full; current_full=$("$NODE_RUNTIME_HOME/v$m/bin/node" -v 2>/dev/null)
+    if [ "$current_full" = "$latest_full" ]; then
+      bruh_ok "Node $m already at latest ($latest_full)."
+    else
+      bruh_info "Updating Node $m: ${current_full:-missing} → $latest_full..."
+      node_install "$m"
+    fi
+  done
   bruh_ok "Done."
 }
 
 node_install_or_activate() {
-  local version; version=$(_node_resolve_version "$1")
-  if registry_is_installed "node" "$version"; then node_activate "$version"
-  else node_install "$version"; fi
+  local major; major=$(_node_resolve_version "$1")
+  if [ -n "$major" ] && registry_is_installed "node" "$major" \
+     && registry_verify "node" "$major" "bin/node"; then
+    node_activate "$major"
+  else
+    node_install "$1"
+  fi
 }

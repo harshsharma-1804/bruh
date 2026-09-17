@@ -1,40 +1,53 @@
 # =============================================================================
 # BRUH — providers/maven.sh
-# Maven provider — Homebrew backend
-# Supported versions: 3.8 (maven@3.8), 3.9 / latest / stable (maven)
+# Standalone provider: official Maven binary tarballs from Apache
+# Layout: $BRUH_HOME/runtimes/maven/v<major.minor>   (extracted Maven home)
+#         $BRUH_HOME/runtimes/maven/current          (symlink → active)
 # =============================================================================
 
 MAVEN_RUNTIME_HOME="$BRUH_HOME/runtimes/maven"
-HOMEBREW_PREFIX="${HOMEBREW_PREFIX:-$(bruh_homebrew_prefix)}"
+MAVEN_METADATA="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/maven-metadata.xml"
 
 # -----------------------------------------------------------------------------
-# Internal helpers
+# Catalog: all release versions from Maven Central metadata
+# (alpha/beta/rc/cr milestones excluded)
 # -----------------------------------------------------------------------------
+_maven_catalog() {
+  curl -fsSL "$MAVEN_METADATA" 2>/dev/null \
+    | grep -oE '<version>[^<]+</version>' \
+    | sed -E 's#</?version>##g' \
+    | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    | sort -V
+}
 
-_maven_formula() {
-  case "$1" in
-    latest|stable|3.9|3) echo "maven" ;;
-    3.8)                  echo "maven@3.8" ;;
-    *)                    echo "maven@$1" ;;
+# Resolve user input → full version (e.g. 3.9 → 3.9.9)
+_maven_resolve_full() {
+  local req="${1:-latest}"
+  case "$req" in
+    latest|stable)
+      _maven_catalog | tail -1
+      ;;
+    lts|3|3.9|"")
+      _maven_catalog | grep "^3\.9\." | tail -1
+      ;;
+    3.8)
+      _maven_catalog | grep "^3\.8\." | tail -1
+      ;;
+    *)
+      local v="${req%.x}"
+      case "$v" in
+        *[!0-9.]*) echo "" ;;
+        *.*.*)     echo "$v" ;;
+        *)         _maven_catalog | grep "^${v}\." | tail -1 ;;
+      esac
+      ;;
   esac
-}
-
-_maven_brew_path() {
-  echo "$HOMEBREW_PREFIX/opt/$(_maven_formula "$1")"
-}
-
-_maven_symlink() {
-  echo "$MAVEN_RUNTIME_HOME/v$1"
 }
 
 _maven_resolve_version() {
-  case "$1" in
-    latest|stable|3|3.9|"")
-      brew info --json=v2 maven 2>/dev/null \
-        | jq -r '.formulae[0].versions.stable' 2>/dev/null \
-        | cut -d'.' -f1-2 ;;
-    *) echo "$1" ;;
-  esac
+  local full; full=$(_maven_resolve_full "$1")
+  [ -z "$full" ] && { echo ""; return; }
+  echo "$full" | cut -d'.' -f1-2
 }
 
 # -----------------------------------------------------------------------------
@@ -42,108 +55,113 @@ _maven_resolve_version() {
 # -----------------------------------------------------------------------------
 maven_search() {
   local filter="${1:-}"
-
   bruh_header "Available Maven versions"
   bruh_divider
 
-  printf "  ${BRUH_BOLD}%-10s  %-20s  %s${BRUH_RESET}\n" "Version" "Formula" "Status"
-  printf "  %-10s  %-20s  %s\n" "─────────" "───────────────────" "──────────────"
-
   local current; current=$(registry_get "maven" "current")
 
-  for formula in maven maven@3.8; do
-    brew info "$formula" >/dev/null 2>&1 || continue
-    local ver
-    case "$formula" in
-      maven)     ver=$(brew info --json=v2 maven 2>/dev/null | jq -r '.formulae[0].versions.stable' | cut -d'.' -f1-2) ;;
-      maven@3.8) ver="3.8" ;;
-    esac
-    [ -n "$filter" ] && [ "$filter" != "$ver" ] && continue
+  printf "  ${BRUH_BOLD}%-10s  %-12s  %s${BRUH_RESET}\n" "Version" "Release" "Status"
+  printf "  %-10s  %-12s  %s\n" "─────────" "───────────" "──────────────"
+
+  # One row per minor line: highest release in that line
+  _maven_catalog | sort -V -r | while read -r full; do
+    local minor; minor=$(echo "$full" | cut -d'.' -f1-2)
+    [ "$minor" = "${_mvn_last_minor:-}" ] && continue
+    _mvn_last_minor="$minor"
+    [ -n "$filter" ] && [ "$filter" != "$minor" ] && continue
     local status=""
-    if registry_is_installed "maven" "$ver"; then
-      [ "$ver" = "$current" ] \
+    registry_is_installed "maven" "$minor" && {
+      [ "$minor" = "$current" ] \
         && status="${BRUH_GREEN}▸ installed (active)${BRUH_RESET}" \
         || status="${BRUH_BLUE}✓ installed${BRUH_RESET}"
-    fi
-    printf "  %-10s  %-20s  %b\n" "$ver" "$formula" "$status"
-  done
+    }
+    printf "  %-10s  %-12s  %b\n" "$minor" "$full" "${status:-}"
+  done || true
 
   printf "\n"
   printf "  ${BRUH_BOLD}Install with:${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}bruh maven 3.9${BRUH_RESET}\n"
-  printf "  ${BRUH_DIM}bruh maven 3.8${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}bruh maven latest${BRUH_RESET}\n"
   printf "\n"
 }
 
 # -----------------------------------------------------------------------------
-# maven_install <version>
+# Install
 # -----------------------------------------------------------------------------
 maven_install() {
-  local version; version=$(_maven_resolve_version "$1")
-  bruh_require_brew
+  local full; full=$(_maven_resolve_full "$1")
+  if [ -z "$full" ]; then
+    bruh_err "Maven version '$1' not found. Try: bruh search maven"; return 1
+  fi
+  local version; version=$(echo "$full" | cut -d'.' -f1-2)
 
-  if registry_is_installed "maven" "$version"; then
-    bruh_warn "Maven $version already installed."
+  local dir="$MAVEN_RUNTIME_HOME/v$version"
+
+  if registry_is_installed "maven" "$version" && registry_verify "maven" "$version" "bin/mvn"; then
+    bruh_warn "Maven $version already installed ($full)."
     maven_activate "$version"; return
   fi
 
-  local formula; formula=$(_maven_formula "$version")
-  local brew_path; brew_path=$(_maven_brew_path "$version")
-  local symlink; symlink=$(_maven_symlink "$version")
+  # dlcdn only hosts current releases; archive.apache.org has everything
+  local url="https://dlcdn.apache.org/maven/maven-3/${full}/binaries/apache-maven-${full}-bin.tar.gz"
+  local fallback="https://archive.apache.org/dist/maven/maven-3/${full}/binaries/apache-maven-${full}-bin.tar.gz"
+  local tmp_tar="$MAVEN_RUNTIME_HOME/.maven-$full.tar.gz"
+  mkdir -p "$MAVEN_RUNTIME_HOME"
 
-  if [ -d "$brew_path" ]; then
-    bruh_info "Maven $version found (pre-existing). Registering..."
-    ln -sfn "$brew_path" "$symlink"
-    registry_record_activate "maven" "$version"
-    maven_activate "$version"; return
+  bruh_info "Downloading Maven $full..."
+  if ! bruh_download "$url" "$tmp_tar"; then
+    bruh_info "Not on dlcdn — trying archive.apache.org..."
+    if ! bruh_download "$fallback" "$tmp_tar"; then
+      rm -f "$tmp_tar"
+      bruh_err "Failed to download Maven $full"; return 1
+    fi
   fi
 
-  bruh_info "Installing Maven $version via Homebrew..."
-  brew install "$formula" || bruh_die "Failed to install Maven $version"
-  ln -sfn "$brew_path" "$symlink"
+  bruh_info "Extracting to $dir..."
+  rm -rf "$dir"
+  # Maven bin tarballs contain a single apache-maven-<ver>/ top directory
+  if ! bruh_extract "$tmp_tar" "$dir" 1; then
+    rm -rf "$dir" "$tmp_tar"
+    bruh_err "Failed to extract Maven archive."; return 1
+  fi
+  rm -f "$tmp_tar"
+
+  # mvn is a script that needs Java at runtime — verify presence/exec bit only
+  [ -x "$dir/bin/mvn" ] || { rm -rf "$dir"; bruh_err "Maven binary failed verification."; return 1; }
+
   registry_record_install "maven" "$version"
-  bruh_ok "Maven $version installed."
+  bruh_ok "Maven $full installed."
   maven_activate "$version"
 }
 
-# -----------------------------------------------------------------------------
-# maven_activate <version>
-# -----------------------------------------------------------------------------
 maven_activate() {
   local version; version=$(_maven_resolve_version "$1")
-  local symlink; symlink=$(_maven_symlink "$version")
-
-  if [ ! -L "$symlink" ] && [ ! -d "$symlink" ]; then
+  if [ -z "$version" ]; then
+    bruh_err "Unknown Maven version: $1"; return 1
+  fi
+  local dir="$MAVEN_RUNTIME_HOME/v$version"
+  if [ ! -d "$dir" ] || ! registry_verify "maven" "$version" "bin/mvn"; then
     bruh_err "Maven $version not installed. Run: bruh maven $version"; return 1
   fi
-
-  ln -sfn "$symlink" "$MAVEN_RUNTIME_HOME/current"
+  ln -sfn "$dir" "$MAVEN_RUNTIME_HOME/current"
   registry_set "maven" "current" "$version"
-
   # Write activation exports to .activate_env so the bruh() shell function
   # wrapper in bruh.env can source them into the current terminal session.
   {
-    printf 'export MAVEN_HOME="%s/current"\n' "$MAVEN_RUNTIME_HOME"
+    printf 'export MAVEN_HOME="%s"\n' "$dir"
     printf 'export PATH="$MAVEN_HOME/bin:$PATH"\n'
     printf 'hash -r 2>/dev/null || true\n'
   } > "$BRUH_HOME/.activate_env"
-
   bruh_ok "Using Maven $version"
-  mvn --version 2>/dev/null | head -1 || true
+  "$dir/bin/mvn" --version 2>/dev/null | head -1 || true
 }
 
-# -----------------------------------------------------------------------------
-# maven_set_default <version>
-# -----------------------------------------------------------------------------
 maven_set_default() {
   local version; version=$(_maven_resolve_version "$1")
-
-  if ! registry_is_installed "maven" "$version"; then
-    bruh_err "Maven $version not installed. Run: bruh maven $version"
+  if [ -z "$version" ] || ! registry_is_installed "maven" "$version"; then
+    bruh_err "Maven $1 not installed. Run: bruh maven $version"
     return 1
   fi
-
   echo "$version" > "$MAVEN_RUNTIME_HOME/.default"
   registry_set "maven" "default" "$version"
   bruh_ok "Default Maven set to $version"
@@ -151,35 +169,21 @@ maven_set_default() {
   maven_activate "$version"
 }
 
-# -----------------------------------------------------------------------------
-# maven_remove <version>
-# -----------------------------------------------------------------------------
+# Remove — just delete the version directory
 maven_remove() {
   local version; version=$(_maven_resolve_version "$1")
   local default; default=$(registry_get "maven" "default")
-
   if [ "$default" = "$version" ]; then
     bruh_err "Maven $version is the default. Change default first."; return 1
   fi
-
   if ! registry_is_installed "maven" "$version"; then
     bruh_err "Maven $version not installed under Bruh."; return 1
   fi
-
-  if registry_is_bruh_installed "maven" "$version"; then
-    local formula; formula=$(_maven_formula "$version")
-    bruh_info "Uninstalling Maven $version..."
-    brew uninstall "$formula" 2>/dev/null || bruh_warn "Homebrew uninstall failed."
-  fi
-
-  rm -f "$(_maven_symlink "$version")" 2>/dev/null || true
+  rm -rf "$MAVEN_RUNTIME_HOME/v$version"
   registry_remove_installed "maven" "$version"
   bruh_ok "Maven $version removed."
 }
 
-# -----------------------------------------------------------------------------
-# maven_lookup
-# -----------------------------------------------------------------------------
 maven_lookup() {
   bruh_header "Installed Maven versions"
   bruh_divider
@@ -201,7 +205,9 @@ maven_lookup() {
   echo "$installed" | while read -r v; do
     [ -z "$v" ] && continue
     local status=""
-    if [ "$v" = "$current" ] && [ "$v" = "$default" ]; then
+    if ! registry_verify "maven" "$v" "bin/mvn"; then
+      status="${BRUH_RED}(missing — reinstall)${BRUH_RESET}"
+    elif [ "$v" = "$current" ] && [ "$v" = "$default" ]; then
       status="${BRUH_GREEN}▸ active  ${BRUH_RESET}${BRUH_BLUE}(default)${BRUH_RESET}"
     elif [ "$v" = "$current" ]; then
       status="${BRUH_GREEN}▸ active${BRUH_RESET}"
@@ -220,53 +226,56 @@ maven_lookup() {
   printf "\n"
 }
 
-# -----------------------------------------------------------------------------
-# maven_locate
-# -----------------------------------------------------------------------------
 maven_locate() {
   bruh_header "Maven location"
-  bruh_log "Binary      : $(command -v mvn 2>/dev/null || echo 'not found')"
-  bruh_log "MAVEN_HOME  : ${MAVEN_HOME:-not set}"
+  local dir="$MAVEN_RUNTIME_HOME/current"
+  bruh_log "MAVEN_HOME : $([ -d "$dir" ] && echo "$dir" || echo 'not installed')"
+  bruh_log "Binary     : $(command -v mvn 2>/dev/null || echo 'not found')"
   mvn --version 2>/dev/null | head -1 | sed 's/^/  /' || true
 }
 
-# -----------------------------------------------------------------------------
-# maven_status
-# -----------------------------------------------------------------------------
 maven_status() {
   bruh_header "Maven"
-  bruh_log "Current    : $(registry_get maven current || echo 'not set')"
+  local current; current=$(registry_get maven current)
+  local dir="$MAVEN_RUNTIME_HOME/v${current:-}"
+  bruh_log "Current    : ${current:-not set} ($(mvn --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo n/a))"
   bruh_log "Default    : $(registry_get maven default || echo 'not set')"
   bruh_log "MAVEN_HOME : ${MAVEN_HOME:-not set}"
   bruh_log "Path       : $(command -v mvn 2>/dev/null || echo 'not found')"
+  bruh_log "Home       : $([ -d "$dir" ] && echo "$dir" || echo 'not installed')"
 }
 
-# -----------------------------------------------------------------------------
-# maven_update [version|all]
-# -----------------------------------------------------------------------------
+# Update — refresh each installed minor to the latest release in that line
 maven_update() {
   local version="${1:-}"
+  local minors
   if [ -z "$version" ] || [ "$version" = "all" ]; then
-    registry_list_installed "maven" | while read -r v; do
-      local formula; formula=$(_maven_formula "$v")
-      bruh_info "Updating Maven $v..."
-      brew upgrade "$formula" 2>/dev/null || bruh_warn "Maven $v already up to date."
-    done
+    minors=$(registry_list_installed "maven")
+    [ -z "$minors" ] && { bruh_warn "No Maven versions installed."; return 0; }
   else
-    local formula; formula=$(_maven_formula "$version")
-    brew upgrade "$formula" 2>/dev/null || bruh_warn "Maven $version already up to date."
+    minors=$(_maven_resolve_version "$version")
   fi
+  echo "$minors" | while read -r m; do
+    [ -z "$m" ] && continue
+    local latest_full; latest_full=$(_maven_resolve_full "$m")
+    local current_full
+    current_full=$("$MAVEN_RUNTIME_HOME/v$m/bin/mvn" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    if [ "$current_full" = "$latest_full" ]; then
+      bruh_ok "Maven $m already at latest ($latest_full)."
+    else
+      bruh_info "Updating Maven $m: ${current_full:-missing} → $latest_full..."
+      maven_install "$m"
+    fi
+  done
   bruh_ok "Done."
 }
 
-# -----------------------------------------------------------------------------
-# maven_install_or_activate <version>
-# -----------------------------------------------------------------------------
 maven_install_or_activate() {
   local version; version=$(_maven_resolve_version "$1")
-  if registry_is_installed "maven" "$version"; then
+  if [ -n "$version" ] && registry_is_installed "maven" "$version" \
+     && registry_verify "maven" "$version" "bin/mvn"; then
     maven_activate "$version"
   else
-    maven_install "$version"
+    maven_install "$1"
   fi
 }

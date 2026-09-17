@@ -28,21 +28,21 @@ Every runtime has its own version manager with its own syntax:
 
 Six tools. Six syntaxes. Six config files. Bruh replaces all of that with a single unified interface. Same command, every tool, every runtime.
 
-**No hidden managers.** Bruh talks directly to Homebrew and rustup. It does not wrap nvm, asdf, sdkman, or any other version manager.
+**No hidden managers.** Bruh downloads official binaries directly from each project (nodejs.org, Adoptium, go.dev, Apache, python-build-standalone) and uses rustup/corepack where they are the official mechanism. It does not wrap nvm, asdf, sdkman, or any other version manager — and it does not need Homebrew.
 
 **Provenance tracking.** Bruh remembers what it installed vs what was already on your machine. `bruh goodbye` only removes what Bruh put there — nothing else.
 
-**JDK provider choice.** For Java, Bruh lets you pick your distribution — OpenJDK, Temurin, Corretto, Zulu, GraalVM, or Oracle — and tracks which provider each version came from.
+**JDK provider choice.** For Java, Bruh lets you pick your distribution — Temurin, Corretto, or Oracle — and tracks which provider each version came from. No sudo, no /Library/Java symlinks.
 
-**Search before you install.** `bruh search java` shows every available JDK distribution and provider from Homebrew before you install anything.
+**Search before you install.** `bruh search java` shows every available JDK distribution and provider before you install anything.
 
 ---
 
 ## Requirements
 
-- macOS (Apple Silicon or Intel) — Linux support coming in Phase 3
-- Homebrew — installed automatically if not present
-- `jq` — installed automatically via Homebrew
+- macOS (Apple Silicon or Intel) or Linux (x64 / arm64)
+- `curl` or `wget`
+- `jq` — installed automatically by the installer if missing
 
 ---
 
@@ -72,7 +72,7 @@ cd bruh
 bash install.sh
 ```
 
-The installer checks for Homebrew, installs it if missing, installs `jq`, scaffolds the install directory, and adds the source line to your shell config automatically.
+The installer installs `jq` if missing, scaffolds the install directory, and adds the source line to your shell config automatically. No Homebrew required.
 
 ---
 
@@ -83,9 +83,38 @@ bruh search java          # see all available JDK distributions
 bruh java 21 temurin      # install Java 21 from Temurin
 bruh node 22              # install and activate Node 22
 bruh python 3.12          # install and activate Python 3.12
+bruh go 1.23              # install and activate Go 1.23
+bruh rust stable          # install and activate Rust stable
 bruh maven 3.9            # install and activate Maven 3.9
 bruh runtimes             # see status of all tools
 ```
+
+---
+
+## How It Works
+
+Bruh is fully self-contained. Every runtime lives inside `$BRUH_HOME` (default `~/.bruh/bruh`):
+
+```
+$BRUH_HOME/
+├── bin/bruh              # entrypoint
+├── lib/                  # core, registry, intent parser
+├── providers/            # one script per tool
+├── env/                  # shell integration per tool
+├── registry/state.json   # what's installed, active, and default
+└── runtimes/
+    ├── node/v22/         # extracted official binary
+    ├── java/v21/         # JDK home — no /Library/Java symlinks, no sudo
+    ├── python/v3.12/
+    └── .../<current>     # symlink → active version
+```
+
+- **Official sources only** — node from nodejs.org, JDKs from Adoptium/Corretto/Oracle, Python from python-build-standalone, Go from go.dev, Maven from Apache, Rust via rustup, Yarn/pnpm via corepack
+- **No Homebrew, no sudo** — installs are archive downloads extracted into your `BRUH_HOME`
+- **Activation = one symlink** — switching versions instantly re-points `current`; new terminals load your default automatically
+- **Clean uninstall** — `bruh goodbye` deletes `$BRUH_HOME` and strips the shell integration. Nothing was ever installed outside it (except Rust toolchains, which live in `~/.rustup` via rustup)
+
+Works on macOS (Apple Silicon + Intel) and Linux (x64 + arm64). Windows support is planned via a native PowerShell module; WSL works today.
 
 ---
 
@@ -101,7 +130,7 @@ See **[COMMANDS.md](./COMMANDS.md)** for every command Bruh supports.
 bruh goodbye
 ```
 
-Removes everything Bruh installed and every trace of itself. Pre-existing runtimes you had before Bruh are not touched.
+Removes everything Bruh installed and every trace of itself — no sudo prompts, no Homebrew uninstall loops. Pre-existing runtimes you had before Bruh are not touched.
 
 ---
 
