@@ -5,7 +5,7 @@
 
 # Bumped at every release. `bruh upgrade` compares this against the
 # latest GitHub release tag.
-BRUH_VERSION="1.1.0"
+BRUH_VERSION="1.2.0"
 
 # -----------------------------------------------------------------------------
 # Colours

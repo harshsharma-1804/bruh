@@ -26,6 +26,13 @@ source "$BRUH_HOME/providers/pnpm.sh"
 source "$BRUH_HOME/providers/maven.sh"
 
 # -----------------------------------------------------------------------------
+# bruh_version
+# -----------------------------------------------------------------------------
+bruh_version() {
+  printf "Bruh v%s (%s channel)\n" "$BRUH_VERSION" "$(bruh_channel)"
+}
+
+# -----------------------------------------------------------------------------
 # bruh_status_all
 # -----------------------------------------------------------------------------
 bruh_status_all() {
@@ -253,6 +260,7 @@ bruh_help() {
 # ── SYSTEM ────────────────────────────────────────────────────────────────────
 printf "${BRUH_BOLD}SYSTEM${BRUH_RESET}\n"
 printf "  %-44s  %s\n" "bruh"                              "Status of all tools"
+printf "  %-44s  %s\n" "bruh version"                      "Show installed Bruh version and channel"
 printf "  %-44s  %s\n" "bruh runtimes"                     "Status table for all tools"
 printf "  %-44s  %s\n" "bruh upgrade"                      "Update Bruh to the latest release"
 printf "  %-44s  %s\n" "bruh upgrade --beta"               "Update to the latest beta (pre-release)"
@@ -502,6 +510,7 @@ case "$action" in
   runtimes) bruh_runtimes; exit 0 ;;
   goodbye)  bruh_goodbye;  exit 0 ;;
   upgrade)  bruh_upgrade "$@"; exit 0 ;;
+  version)  bruh_version;  exit 0 ;;
   status)
     if [ "$tool" = "all" ] || [ -z "$tool" ]; then
       bruh_status_all; exit 0
