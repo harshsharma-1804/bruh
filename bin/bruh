@@ -13,7 +13,6 @@ source "$BRUH_HOME/lib/registry.sh"
 source "$BRUH_HOME/lib/intent.sh"
 
 bruh_require_jq
-export HOMEBREW_PREFIX="$(bruh_homebrew_prefix)"
 
 source "$BRUH_HOME/providers/node.sh"
 source "$BRUH_HOME/providers/java.sh"
@@ -321,56 +320,15 @@ bruh_goodbye() {
   printf "\n"
   bruh_info "Building removal plan from registry..."
 
-  local java_versions
-  java_versions=$(registry_list_bruh_installed "java" 2>/dev/null || echo "")
-
-  # Java — single sudo call for ALL JVM symlinks, immediately after
-  # authentication, so the credential cache can't expire mid-run and
-  # prompt once per version.
-  if [ -n "$java_versions" ]; then
-    bruh_info "Java JVM symlinks require sudo. Please authenticate:"
-    sudo -v || bruh_die "sudo authentication failed"
-    local _java_links=""
-    for v in $java_versions; do
+  # Standalone runtimes (node, java, python, go, maven) live entirely in
+  # $BRUH_HOME/runtimes — removal is a plain rm -rf, no sudo, no brew.
+  local tool runtime_home
+  for tool in node java python go maven; do
+    registry_list_bruh_installed "$tool" 2>/dev/null | while read -r v; do
       [ -z "$v" ] && continue
-      local jl; jl=$(_java_jvm_link "$v")
-      ( [ -e "$jl" ] || [ -L "$jl" ] ) && _java_links="$_java_links $jl"
+      bruh_info "Removing ${tool} $v..."
+      rm -rf "${BRUH_HOME}/runtimes/${tool}/v${v}" 2>/dev/null || true
     done
-    if [ -n "$_java_links" ]; then
-      # shellcheck disable=SC2086
-      sudo rm -f $_java_links
-      bruh_ok "Removed JVM symlinks."
-    fi
-  fi
-
-  # Node — standalone runtimes live entirely in $BRUH_HOME; just delete them
-  registry_list_bruh_installed "node" 2>/dev/null | while read -r v; do
-    [ -z "$v" ] && continue
-    bruh_info "Removing Node $v..."
-    rm -rf "$NODE_RUNTIME_HOME/v${v}" 2>/dev/null || true
-  done
-
-  # Java — brew uninstalls (no sudo needed, can be slow)
-  echo "$java_versions" | while read -r v; do
-    [ -z "$v" ] && continue
-    bruh_info "Removing Java $v..."
-    brew uninstall "$(_java_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Java $v"
-  done
-
-  # Python
-  registry_list_bruh_installed "python" 2>/dev/null | while read -r v; do
-    [ -z "$v" ] && continue
-    bruh_info "Removing Python $v..."
-    brew uninstall "$(_python_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Python $v"
-    rm -f "$PYTHON_RUNTIME_HOME/v${v}" 2>/dev/null || true
-  done
-
-  # Go
-  registry_list_bruh_installed "go" 2>/dev/null | while read -r v; do
-    [ -z "$v" ] && continue
-    bruh_info "Removing Go $v..."
-    brew uninstall "$(_go_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Go $v"
-    rm -f "$GO_RUNTIME_HOME/v${v}" 2>/dev/null || true
   done
 
   # Rust
@@ -394,13 +352,7 @@ bruh_goodbye() {
     corepack remove "pnpm@${pnpm_exact}" 2>/dev/null || bruh_warn "Could not remove pnpm"
   fi
 
-  # Maven
-  registry_list_bruh_installed "maven" 2>/dev/null | while read -r v; do
-    [ -z "$v" ] && continue
-    bruh_info "Removing Maven $v..."
-    brew uninstall "$(_maven_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Maven $v"
-    rm -f "$MAVEN_RUNTIME_HOME/v${v}" 2>/dev/null || true
-  done
+  # Maven — covered by the standalone runtime loop above
 
   # Shell integration — strip all 3 lines: comment + BRUH_HOME export + source
   bruh_info "Removing shell integration..."

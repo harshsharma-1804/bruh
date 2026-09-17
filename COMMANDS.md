@@ -25,15 +25,15 @@ Discover what is available to install before installing anything.
 
 ```bash
 bruh search                        # show tool picker — prompts you to pick a tool
-bruh search node                   # list available Node versions from Homebrew
+bruh search node                   # list available Node versions from nodejs.org
 bruh search java                   # list all JDK distributions and providers
 bruh search java 21                # filter to Java 21 only — shows all providers for that version
-bruh search python                 # list available Python versions from Homebrew
-bruh search go                     # list available Go versions from Homebrew
+bruh search python                 # list available Python versions (python-build-standalone)
+bruh search go                     # list available Go versions from go.dev
 bruh search rust                   # list available Rust channels (stable, beta, nightly)
 bruh search yarn                   # list available Yarn versions from npm registry
 bruh search pnpm                   # list available pnpm versions from npm registry
-bruh search maven                  # list available Maven versions from Homebrew
+bruh search maven                  # list available Maven versions from Maven Central
 ```
 
 Installed versions are marked in the search output so you can see what you already have.
@@ -356,12 +356,11 @@ A full self-removal with no trace left:
 
 1. Prompts for confirmation
 2. Reads registry to build removal plan
-3. Uninstalls runtimes Bruh installed via Homebrew (pre-existing ones are left alone)
-4. Removes Java JVM symlinks from `/Library/Java/JavaVirtualMachines/` (requires sudo — prompts once)
-5. Removes Yarn and pnpm from corepack, Maven from Homebrew
-6. Strips the source line from `~/.zshrc` and `~/.bashrc`
-7. Unsets all environment variables in the current session
-8. Deletes the Bruh install directory
+3. Deletes runtime version directories under `$BRUH_HOME/runtimes/` (node, java, python, go, maven) — no sudo, no Homebrew
+4. Uninstalls Rust toolchains via rustup, and removes Yarn/pnpm from corepack
+5. Strips the source line from `~/.zshrc` and `~/.bashrc`
+6. Unsets all environment variables in the current session
+7. Deletes the Bruh install directory
 
 ---
 

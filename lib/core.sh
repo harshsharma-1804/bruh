@@ -81,14 +81,8 @@ bruh_platform() {
   esac
 }
 
-bruh_homebrew_prefix() {
-  if [ "$(bruh_arch)" = "arm64" ]; then
-    echo "/opt/homebrew"
-  else
-    echo "/usr/local"
-  fi
-}
-
+# -----------------------------------------------------------------------------
+# Download & extract infrastructure (self-reliant runtime installs)
 # -----------------------------------------------------------------------------
 # Dependency guards
 # -----------------------------------------------------------------------------
@@ -104,12 +98,8 @@ bruh_require() {
   fi
 }
 
-bruh_require_brew() {
-  bruh_require "brew" "Install Homebrew from https://brew.sh"
-}
-
 bruh_require_jq() {
-  bruh_require "jq" "Run: brew install jq"
+  bruh_require "jq" "Install jq: brew install jq | apt install jq | dnf install jq"
 }
 
 # -----------------------------------------------------------------------------

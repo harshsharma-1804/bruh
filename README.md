@@ -28,21 +28,21 @@ Every runtime has its own version manager with its own syntax:
 
 Six tools. Six syntaxes. Six config files. Bruh replaces all of that with a single unified interface. Same command, every tool, every runtime.
 
-**No hidden managers.** Bruh talks directly to Homebrew and rustup. It does not wrap nvm, asdf, sdkman, or any other version manager.
+**No hidden managers.** Bruh downloads official binaries directly from each project (nodejs.org, Adoptium, go.dev, Apache, python-build-standalone) and uses rustup/corepack where they are the official mechanism. It does not wrap nvm, asdf, sdkman, or any other version manager — and it does not need Homebrew.
 
 **Provenance tracking.** Bruh remembers what it installed vs what was already on your machine. `bruh goodbye` only removes what Bruh put there — nothing else.
 
-**JDK provider choice.** For Java, Bruh lets you pick your distribution — OpenJDK, Temurin, Corretto, Zulu, GraalVM, or Oracle — and tracks which provider each version came from.
+**JDK provider choice.** For Java, Bruh lets you pick your distribution — Temurin, Corretto, or Oracle — and tracks which provider each version came from. No sudo, no /Library/Java symlinks.
 
-**Search before you install.** `bruh search java` shows every available JDK distribution and provider from Homebrew before you install anything.
+**Search before you install.** `bruh search java` shows every available JDK distribution and provider before you install anything.
 
 ---
 
 ## Requirements
 
-- macOS (Apple Silicon or Intel) — Linux support coming in Phase 3
-- Homebrew — installed automatically if not present
-- `jq` — installed automatically via Homebrew
+- macOS (Apple Silicon or Intel) or Linux (x64 / arm64)
+- `curl` or `wget`
+- `jq` — installed automatically by the installer if missing
 
 ---
 
@@ -72,7 +72,7 @@ cd bruh
 bash install.sh
 ```
 
-The installer checks for Homebrew, installs it if missing, installs `jq`, scaffolds the install directory, and adds the source line to your shell config automatically.
+The installer installs `jq` if missing, scaffolds the install directory, and adds the source line to your shell config automatically. No Homebrew required.
 
 ---
 

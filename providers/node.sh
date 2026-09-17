@@ -245,7 +245,7 @@ node_search() {
         || status="${BRUH_BLUE}✓ installed${BRUH_RESET}"
     }
     printf "  %-8s  %-12s  %-12s  %b\n" "$major" "$full" "${lts:--}" "${status:-}"
-  done
+  done || true
 
   printf "\n"
   printf "  ${BRUH_BOLD}Install with:${BRUH_RESET}\n"
