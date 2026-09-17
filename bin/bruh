@@ -321,7 +321,7 @@ bruh_goodbye() {
   bruh_info "Building removal plan from registry..."
 
   # Standalone runtimes (node, java, python, go, maven) live entirely in
-  # $BRUH_HOME/runtimes — removal is a plain rm -rf, no sudo, no brew.
+  # $BRUH_HOME/runtimes — removal is a plain rm -rf, no sudo needed.
   local tool runtime_home
   for tool in node java python go maven; do
     registry_list_bruh_installed "$tool" 2>/dev/null | while read -r v; do

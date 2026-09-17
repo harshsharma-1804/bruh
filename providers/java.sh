@@ -1,6 +1,6 @@
 # =============================================================================
 # BRUH — providers/java.sh
-# Standalone JDK provider — official binary downloads (no Homebrew, no sudo)
+# Standalone JDK provider — official binary downloads (no sudo)
 # Supported providers: temurin (default "openjdk"), corretto, oracle
 #   zulu/graalvm are not yet available via direct download
 # Layout: $BRUH_HOME/runtimes/java/v<major>       (extracted JDK home)

@@ -1,6 +1,6 @@
 # =============================================================================
 # BRUH — providers/node.sh
-# Standalone provider: official binaries from nodejs.org (no Homebrew)
+# Standalone provider: official binaries from nodejs.org
 # Layout: $BRUH_HOME/runtimes/node/v<major>  (real dir, extracted tarball)
 #         $BRUH_HOME/runtimes/node/current   (symlink → active v<major>)
 # =============================================================================
