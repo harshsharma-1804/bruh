@@ -69,6 +69,18 @@ bruh_arch() {
   esac
 }
 
+# Canonical platform triple used to pick binary downloads:
+# matches the naming used by nodejs.org and most upstream projects.
+bruh_platform() {
+  case "$(uname -s)/$(uname -m)" in
+    Darwin/arm64)              echo "darwin-arm64" ;;
+    Darwin/x86_64)             echo "darwin-x64" ;;
+    Linux/x86_64)              echo "linux-x64" ;;
+    Linux/arm64|Linux/aarch64) echo "linux-arm64" ;;
+    *)                         echo "unsupported" ;;
+  esac
+}
+
 bruh_homebrew_prefix() {
   if [ "$(bruh_arch)" = "arm64" ]; then
     echo "/opt/homebrew"
@@ -98,6 +110,48 @@ bruh_require_brew() {
 
 bruh_require_jq() {
   bruh_require "jq" "Run: brew install jq"
+}
+
+# -----------------------------------------------------------------------------
+# Download & extract infrastructure (self-reliant runtime installs)
+# -----------------------------------------------------------------------------
+bruh_download() { # bruh_download <url> <dest-file>
+  if command -v curl >/dev/null 2>&1; then
+    curl -fSL --retry 3 -o "$2" "$1"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -O "$2" "$1"
+  else
+    bruh_die "Neither curl nor wget found. Install one and retry."
+  fi
+}
+
+bruh_extract() { # bruh_extract <archive> <dest-dir> [strip-components]
+  local archive="$1" dest="$2" strip="${3:-0}"
+  mkdir -p "$dest"
+  case "$archive" in
+    *.tar.gz|*.tgz)
+      if [ "$strip" -gt 0 ]; then
+        tar -xzf "$archive" -C "$dest" --strip-components="$strip"
+      else
+        tar -xzf "$archive" -C "$dest"
+      fi
+      ;;
+    *.zip)
+      if [ "$strip" -gt 0 ]; then
+        local tmp inner
+        tmp=$(mktemp -d)
+        unzip -qo "$archive" -d "$tmp"
+        inner=$(ls "$tmp" | head -1)
+        ( shopt -s dotglob; mv "$tmp/$inner"/* "$dest"/ )
+        rm -rf "$tmp"
+      else
+        unzip -qo "$archive" -d "$dest"
+      fi
+      ;;
+    *)
+      bruh_die "Unsupported archive format: $archive"
+      ;;
+  esac
 }
 
 # -----------------------------------------------------------------------------

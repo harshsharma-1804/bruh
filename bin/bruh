@@ -328,12 +328,11 @@ bruh_goodbye() {
     sudo -v || bruh_die "sudo authentication failed"
   fi
 
-  # Node
+  # Node — standalone runtimes live entirely in $BRUH_HOME; just delete them
   registry_list_bruh_installed "node" 2>/dev/null | while read -r v; do
     [ -z "$v" ] && continue
     bruh_info "Removing Node $v..."
-    brew uninstall "$(_node_formula "$v")" 2>/dev/null || bruh_warn "Could not uninstall Node $v"
-    rm -f "$NODE_RUNTIME_HOME/v${v}" 2>/dev/null || true
+    rm -rf "$NODE_RUNTIME_HOME/v${v}" 2>/dev/null || true
   done
 
   # Java

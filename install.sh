@@ -49,13 +49,15 @@ _bold "Checking system..."
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 
-[ "$OS" != "Darwin" ] && _die "Bruh currently supports macOS only. (Detected: $OS)"
-_ok "macOS detected ($ARCH)"
+case "$OS" in
+  Darwin) _ok "macOS detected ($ARCH)" ;;
+  Linux)  _ok "Linux detected ($ARCH)" ;;
+  *)      _die "Unsupported OS: $OS. Bruh supports macOS and Linux (on Windows, use WSL or Git Bash)." ;;
+esac
 
 case "$ARCH" in
-  arm64)  HOMEBREW_PREFIX="/opt/homebrew" ; BRUH_DEFAULT="$HOME/.bruh" ;;
-  x86_64) HOMEBREW_PREFIX="/usr/local"   ; BRUH_DEFAULT="$HOME/.bruh" ;;
-  *)      _die "Unknown architecture: $ARCH" ;;
+  arm64|aarch64|x86_64) BRUH_DEFAULT="$HOME/.bruh" ;;
+  *)                    _die "Unknown architecture: $ARCH" ;;
 esac
 
 # -----------------------------------------------------------------------------
@@ -93,8 +95,8 @@ if [ -z "$BRUH_HOME" ] && [ -n "${BRUH_DIR:-}" ]; then
   BRUH_HOME="$BRUH_DIR"
 fi
 
-# -- Finder picker (attempted unconditionally — fails silently if no display) -
-if [ -z "$BRUH_HOME" ]; then
+# -- Finder picker (macOS only — attempted unconditionally, fails silently) --
+if [ -z "$BRUH_HOME" ] && [ "$OS" = "Darwin" ] && command -v osascript >/dev/null 2>&1; then
   _PICKED=""
   _PICKED=$(osascript 2>/dev/null <<'APPLESCRIPT'
 tell application "Finder"
@@ -159,27 +161,7 @@ if [ -d "$BRUH_HOME/bin" ] && [ -f "$BRUH_HOME/bin/bruh" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 4. Homebrew
-# -----------------------------------------------------------------------------
-_bold "Checking Homebrew..."
-
-if command -v brew >/dev/null 2>&1; then
-  _ok "Homebrew found ($(brew --version | head -1))"
-else
-  _warn "Homebrew not found. Installing..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-    || _die "Homebrew installation failed."
-  if [ "$ARCH" = "arm64" ]; then
-    eval "$(/opt/homebrew/bin/brew shellenv)"
-  else
-    eval "$(/usr/local/bin/brew shellenv)"
-  fi
-  command -v brew >/dev/null 2>&1 || _die "brew still not found after install. Restart terminal and re-run."
-  _ok "Homebrew installed."
-fi
-
-# -----------------------------------------------------------------------------
-# 5. jq
+# 4. jq (only external dependency)
 # -----------------------------------------------------------------------------
 _bold "Checking jq..."
 
@@ -187,7 +169,25 @@ if command -v jq >/dev/null 2>&1; then
   _ok "jq found ($(jq --version))"
 else
   _info "Installing jq..."
-  brew install jq || _die "Failed to install jq"
+  case "$OS" in
+    Darwin)
+      command -v brew >/dev/null 2>&1 \
+        && brew install jq \
+        || _die "jq is required. Install it from https://jqlang.github.io/jq/download/ and re-run."
+      ;;
+    Linux)
+      if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y jq
+      elif command -v dnf >/dev/null 2>&1; then
+        sudo dnf install -y jq
+      elif command -v pacman >/dev/null 2>&1; then
+        sudo pacman -S --noconfirm jq
+      else
+        _die "jq is required. Install it from https://jqlang.github.io/jq/download/ and re-run."
+      fi
+      ;;
+  esac
+  command -v jq >/dev/null 2>&1 || _die "jq installation failed."
   _ok "jq installed."
 fi
 
