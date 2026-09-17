@@ -114,6 +114,19 @@ See **[COMMANDS.md](./COMMANDS.md)** for every command Bruh supports.
 
 ---
 
+## Staying Updated
+
+```bash
+bruh upgrade              # update to the latest stable release
+bruh upgrade --beta       # opt into beta builds (pre-releases from develop)
+```
+
+Bruh checks GitHub releases, compares against your installed version, and syncs only code files — your installed runtimes, defaults, and registry are never touched.
+
+**Channels:** `stable` (default) tracks releases tagged on `main`. `beta` tracks pre-releases published from `develop` — set `BRUH_CHANNEL=beta` for installs, or pass `--beta` to `bruh upgrade`.
+
+---
+
 ## Uninstall
 
 ```bash

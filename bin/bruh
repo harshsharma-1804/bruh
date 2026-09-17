@@ -14,6 +14,8 @@ source "$BRUH_HOME/lib/intent.sh"
 
 bruh_require_jq
 
+BRUH_REPO="harshsharma-1804/bruh"
+
 source "$BRUH_HOME/providers/node.sh"
 source "$BRUH_HOME/providers/java.sh"
 source "$BRUH_HOME/providers/python.sh"
@@ -27,7 +29,8 @@ source "$BRUH_HOME/providers/maven.sh"
 # bruh_status_all
 # -----------------------------------------------------------------------------
 bruh_status_all() {
-  printf "\n${BRUH_BOLD}  Bruh${BRUH_RESET} — runtime environment manager\n\n"
+  printf "\n${BRUH_BOLD}  Bruh v%s${BRUH_RESET} ${BRUH_DIM}(%s channel)${BRUH_RESET} — runtime environment manager\n\n" \
+    "$BRUH_VERSION" "$(bruh_channel)"
   bruh_divider
   local tools="node java python go rust yarn pnpm maven"
   for tool in $tools; do
@@ -247,11 +250,13 @@ bruh_help() {
   printf "  %-44s\n" "bruh what java version"
   printf "\n"
 
-  # ── SYSTEM ────────────────────────────────────────────────────────────────────
-  printf "${BRUH_BOLD}SYSTEM${BRUH_RESET}\n"
-  printf "  %-44s  %s\n" "bruh help"                         "Show this reference"
-  printf "  %-44s  %s\n" "bruh runtimes"                     "Status table for all tools"
-  printf "  %-44s  %s\n" "bruh goodbye"                      "Uninstall Bruh + everything it installed"
+# ── SYSTEM ────────────────────────────────────────────────────────────────────
+printf "${BRUH_BOLD}SYSTEM${BRUH_RESET}\n"
+printf "  %-44s  %s\n" "bruh"                              "Status of all tools"
+printf "  %-44s  %s\n" "bruh runtimes"                     "Status table for all tools"
+printf "  %-44s  %s\n" "bruh upgrade"                      "Update Bruh to the latest release"
+printf "  %-44s  %s\n" "bruh upgrade --beta"               "Update to the latest beta (pre-release)"
+printf "  %-44s  %s\n" "bruh goodbye"                      "Uninstall Bruh + everything it installed"
   printf "\n"
   printf "  ${BRUH_DIM}Full docs: COMMANDS.md${BRUH_RESET}\n"
   printf "\n"
@@ -301,6 +306,82 @@ bruh_lookup_all() {
   printf "  ${BRUH_DIM}bruh lookup node${BRUH_RESET}\n"
   printf "  ${BRUH_DIM}bruh lookup java${BRUH_RESET}\n"
   printf "\n"
+}
+
+# -----------------------------------------------------------------------------
+# bruh_upgrade — self-update from GitHub releases
+#   stable channel → latest release;  BRUH_CHANNEL=beta / --beta → newest pre-release
+# Syncs code files into $BRUH_HOME; registry/ and runtimes/ are never touched.
+# -----------------------------------------------------------------------------
+bruh_upgrade() {
+  local want_beta=""
+  local a
+  for a in "$@"; do
+    case "$a" in
+      --beta) want_beta="1" ;;
+    esac
+  done
+  [ -n "$want_beta" ] && export BRUH_CHANNEL="beta"
+  local channel; channel=$(bruh_channel)
+
+  printf "\n${BRUH_BOLD}  Bruh Upgrade${BRUH_RESET} ${BRUH_DIM}(v%s, %s channel)${BRUH_RESET}\n\n" "$BRUH_VERSION" "$channel"
+  bruh_divider
+
+  bruh_info "Checking for the latest release..."
+  local tag
+  if [ "$channel" = "beta" ]; then
+    tag=$(curl -fsSL "https://api.github.com/repos/${BRUH_REPO}/releases" 2>/dev/null \
+      | jq -r '[.[] | select(.prerelease)][0].tag_name' 2>/dev/null)
+  else
+    tag=$(curl -fsSL "https://api.github.com/repos/${BRUH_REPO}/releases/latest" 2>/dev/null \
+      | jq -r '.tag_name' 2>/dev/null)
+  fi
+
+  if [ -z "$tag" ] || [ "$tag" = "null" ]; then
+    if [ "$channel" = "beta" ]; then
+      bruh_err "No beta releases published yet. Try the stable channel: bruh upgrade"
+    else
+      bruh_err "Could not reach GitHub releases. Check your connection."
+    fi
+    return 1
+  fi
+
+  local cmp; cmp=$(bruh_vercmp "$BRUH_VERSION" "$tag")
+  if [ "$cmp" -ge 0 ]; then
+    bruh_ok "Bruh is up to date (v${BRUH_VERSION}, latest ${channel}: ${tag})."
+    return 0
+  fi
+
+  bruh_info "New version available: ${tag} (${channel})"
+  local url="https://github.com/${BRUH_REPO}/archive/refs/tags/${tag}.tar.gz"
+  local tmp; tmp=$(mktemp -d)
+
+  bruh_info "Downloading ${tag}..."
+  if ! curl -fsSL "$url" | tar -xz -C "$tmp" --strip-components=1; then
+    rm -rf "$tmp"
+    bruh_err "Failed to download ${tag}."; return 1
+  fi
+
+  # Sanity-check the downloaded code before touching the install
+  bash -n "$tmp/bin/bruh" || { rm -rf "$tmp"; bruh_err "Downloaded version is corrupt."; return 1; }
+
+  bruh_info "Installing..."
+  cp "$tmp/bin/bruh"             "$BRUH_HOME/bin/bruh"            && chmod +x "$BRUH_HOME/bin/bruh"
+  cp "$tmp"/lib/*.sh             "$BRUH_HOME/lib/"
+  cp "$tmp"/providers/*.sh       "$BRUH_HOME/providers/"
+  cp "$tmp"/env/*.env            "$BRUH_HOME/env/"
+  [ -f "$tmp/install.sh" ]    && cp "$tmp/install.sh"    "$BRUH_HOME/install.sh"
+  [ -f "$tmp/README.md" ]     && cp "$tmp/README.md"     "$BRUH_HOME/README.md"
+  [ -f "$tmp/COMMANDS.md" ]   && cp "$tmp/COMMANDS.md"   "$BRUH_HOME/COMMANDS.md"
+  [ -f "$tmp/DESIGN_BINARIES.md" ] && cp "$tmp/DESIGN_BINARIES.md" "$BRUH_HOME/DESIGN_BINARIES.md"
+  rm -rf "$tmp"
+
+  # New shell commands may exist — clear the command cache in the parent shell
+  printf 'hash -r 2>/dev/null || true\n' > "$BRUH_HOME/.activate_env"
+
+  bruh_ok "Bruh upgraded: v${BRUH_VERSION} → ${tag}"
+  bruh_info "Your installed runtimes and defaults were not touched."
+  return 0
 }
 
 # -----------------------------------------------------------------------------
@@ -420,6 +501,7 @@ case "$action" in
   help)     bruh_help;     exit 0 ;;
   runtimes) bruh_runtimes; exit 0 ;;
   goodbye)  bruh_goodbye;  exit 0 ;;
+  upgrade)  bruh_upgrade "$@"; exit 0 ;;
   status)
     if [ "$tool" = "all" ] || [ -z "$tool" ]; then
       bruh_status_all; exit 0
