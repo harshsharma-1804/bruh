@@ -106,6 +106,7 @@ bruh_parse_intent() {
     help|--help|-h)                  echo "help||";     return ;;
     runtimes|tools)                  echo "runtimes||"; return ;;
     upgrade|self-update|update-bruh) echo "upgrade||";  return ;;
+    version|--version|-v)            echo "version||";  return ;;
   esac
 
   # ── update bruh — self-update, same as `bruh upgrade` ────────────────────────
