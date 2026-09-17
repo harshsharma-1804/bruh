@@ -48,20 +48,8 @@ Six tools. Six syntaxes. Six config files. Bruh replaces all of that with a sing
 
 ## Install
 
-### Stable (recommended)
-
-> Installs from the `main` branch — tested and ready to use.
-
 ```bash
 curl -fsSL https://raw.githubusercontent.com/harshsharma-1804/bruh/main/install.sh | bash
-```
-
-### Developer / preview
-
-> Installs from the `develop` branch — may be unstable or incomplete.
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/harshsharma-1804/bruh/develop/install.sh | BRUH_BRANCH=develop bash
 ```
 
 ### From a local clone
